@@ -1,16 +1,28 @@
-import sys, subprocess, os, site, json, re, asyncio
-site.main()
-
-import discord
+import sys, subprocess, os, site, json, re, asyncio, discord
 from discord import app_commands
 from dotenv import load_dotenv
-
-# 구글 클라우드 TTS 라이브러리
 from google.cloud import texttospeech
 
-# 서비스 계정 키 파일 경로 설정
-os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "google_key.json"
+site.main()
+load_dotenv()
 
+google_credentials = {
+    "type": "service_account"
+    "project_id": "gen-lang-client-0463073512",
+    "private_key_id": os.getenv("private_key_id"),
+    "private_key": os.getenv("private_key").replace("\\n", "\n"),  # 줄바꿈 문자 복원
+    "client_email": "tts-bot-key@gen-lang-client-0463073512.iam.gserviceaccount.com",
+    "client_id": "102784716861828821559",
+    "auth_uri": os.getenv("auth_uri"),
+    "token_uri": os.getenv("token_uri"),
+    "auth_provider_x509_cert_url": os.getenv("auth_provider_x509_cert_url"),
+    "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/tts-bot-key%40gen-lang-client-0463073512.iam.gserviceaccount.com",
+    "universe_domain": "googleapis.com"
+}
+
+# 구글 TTS 클라이언트에 인증 정보 직접 주입
+from google.oauth2 import service_account
+credentials = service_account.Credentials.from_service_account_info(google_credentials)
 class TTSBot(discord.Client):
     def __init__(self):
         intents = discord.Intents.default()
@@ -19,7 +31,7 @@ class TTSBot(discord.Client):
         super().__init__(intents=intents)
         self.tree = app_commands.CommandTree(self)
         self.guild_settings = {} # {guild_id: {'channel_id': int, 'voice_name': str, 'speed': str, 'read_non_vc': bool}}
-        self.tts_client = texttospeech.TextToSpeechClient()
+        self.tts_client = texttospeech.TextToSpeechClient(credentials=credentials)
 
     async def setup_hook(self):
         await self.tree.sync()
@@ -226,5 +238,4 @@ async def on_message(message):
     audio_source = discord.PCMVolumeTransformer(raw_audio, volume=0.25)
     voice_client.play(audio_source, after=after_playing)
 
-token = os.getenv("DISCORD_TOKEN")
-bot.run(token)
+bot.run(os.getenv("DISCORD_TOKEN"))
