@@ -2,7 +2,7 @@
 discord.py>=2.3.0
 
 # Google Cloud Text-to-Speech API
-google-cloud-text-to-speech>=2.14.0
+google-cloud-text-to-speech
 google-auth>=2.20.0
 
 # Environment variables
