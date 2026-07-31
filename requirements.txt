@@ -1,0 +1,12 @@
+# Discord Bot Core
+discord.py>=2.3.0
+
+# Google Cloud Text-to-Speech API
+google-cloud-text-to-speech>=2.14.0
+google-auth>=2.20.0
+
+# Environment variables
+python-dotenv>=1.0.0
+
+# Audio handling (Voice support)
+PyNaCl>=1.5.0
