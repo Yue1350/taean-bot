@@ -156,77 +156,66 @@ async def on_ready():
     await bot.change_presence(status=discord.Status.online, activity=activity)
     print(f"✅ 로그인 성공: {bot.user.name} (상태 메시지 설정 완료)")
 
-# --- 음성 상태 변경 이벤트 (입장/퇴장 안내 및 혼자 남았을 때 자동 퇴장 처리) ---
+# --- 음성 상태 변경 이벤트 (입장/퇴장 TTS 안내 및 혼자 남았을 때 자동 퇴장 처리) ---
 @bot.event
 async def on_voice_state_update(member, before, after):
     if member.bot:
         return
 
     settings = bot.get_guild_settings(member.guild.id)
-    target_channel_id = settings.get('channel_id') or settings.get('temp_channel_id')
     vc = member.guild.voice_client
 
     if before.channel is None and after.channel is not None:
-        if vc and after.channel == vc.channel and target_channel_id:
-            channel = member.guild.get_channel(target_channel_id)
-            if channel:
-                tts_text = f"{member.display_name} 어하"
-                msg = await channel.send(tts_text)
-                asyncio.create_task(delete_message_after_delay(msg, 10))
+        if vc and after.channel == vc.channel:
+            tts_text = f"{member.display_name} 어하"
+            voice_name = settings.get('voice_name', 'ko-KR-Neural2-A')
+            speed = settings.get('speed', '1.0')
+            filename = f"tts_join_{member.id}_{int(asyncio.get_event_loop().time())}.mp3"
 
-                voice_name = settings.get('voice_name', 'ko-KR-Neural2-A')
-                speed = settings.get('speed', '1.0')
-                filename = f"tts_join_{member.id}_{int(asyncio.get_event_loop().time())}.mp3"
+            try:
+                audio_content = generate_google_tts(bot.tts_client, tts_text, voice_name)
+                with open(filename, "wb") as out:
+                    out.write(audio_content)
 
-                try:
-                    audio_content = generate_google_tts(bot.tts_client, tts_text, voice_name)
-                    with open(filename, "wb") as out:
-                        out.write(audio_content)
+                while vc.is_playing():
+                    await asyncio.sleep(0.5)
 
-                    while vc.is_playing():
-                        await asyncio.sleep(0.5)
+                def after_playing(error):
+                    if error: print(f"❌ 재생 중 오류 발생: {error}")
+                    asyncio.run_coroutine_threadsafe(remove_file_safely(filename), bot.loop)
 
-                    def after_playing(error):
-                        if error: print(f"❌ 재생 중 오류 발생: {error}")
-                        asyncio.run_coroutine_threadsafe(remove_file_safely(filename), bot.loop)
-
-                    ffmpeg_executable = "./ffmpeg.exe" if os.path.exists("./ffmpeg.exe") else "ffmpeg"
-                    raw_audio = discord.FFmpegPCMAudio(filename, executable=ffmpeg_executable, options=f'-af atempo={speed}')
-                    audio_source = discord.PCMVolumeTransformer(raw_audio, volume=0.25)
-                    vc.play(audio_source, after=after_playing)
-                except Exception as e:
-                    print(f"❌ 입장 TTS 생성 실패: {e}")
+                ffmpeg_executable = "./ffmpeg.exe" if os.path.exists("./ffmpeg.exe") else "ffmpeg"
+                raw_audio = discord.FFmpegPCMAudio(filename, executable=ffmpeg_executable, options=f'-af atempo={speed}')
+                audio_source = discord.PCMVolumeTransformer(raw_audio, volume=0.25)
+                vc.play(audio_source, after=after_playing)
+            except Exception as e:
+                print(f"❌ 입장 TTS 생성 실패: {e}")
 
     elif before.channel is not None and after.channel is None:
-        if vc and before.channel == vc.channel and target_channel_id:
-            channel = member.guild.get_channel(target_channel_id)
-            if channel:
-                tts_text = f"{member.display_name} 어바"
-                msg = await channel.send(tts_text)
-                asyncio.create_task(delete_message_after_delay(msg, 10))
+        if vc and before.channel == vc.channel:
+            tts_text = f"{member.display_name} 어바"
+            voice_name = settings.get('voice_name', 'ko-KR-Neural2-A')
+            speed = settings.get('speed', '1.0')
+            filename = f"tts_leave_{member.id}_{int(asyncio.get_event_loop().time())}.mp3"
 
-                voice_name = settings.get('voice_name', 'ko-KR-Neural2-A')
-                speed = settings.get('speed', '1.0')
-                filename = f"tts_leave_{member.id}_{int(asyncio.get_event_loop().time())}.mp3"
+            try:
+                audio_content = generate_google_tts(bot.tts_client, tts_text, voice_name)
+                with open(filename, "wb") as out:
+                    out.write(audio_content)
 
-                try:
-                    audio_content = generate_google_tts(bot.tts_client, tts_text, voice_name)
-                    with open(filename, "wb") as out:
-                        out.write(audio_content)
+                while vc.is_playing():
+                    await asyncio.sleep(0.5)
 
-                    while vc.is_playing():
-                        await asyncio.sleep(0.5)
+                def after_playing(error):
+                    if error: print(f"❌ 재생 중 오류 발생: {error}")
+                    asyncio.run_coroutine_threadsafe(remove_file_safely(filename), bot.loop)
 
-                    def after_playing(error):
-                        if error: print(f"❌ 재생 중 오류 발생: {error}")
-                        asyncio.run_coroutine_threadsafe(remove_file_safely(filename), bot.loop)
-
-                    ffmpeg_executable = "./ffmpeg.exe" if os.path.exists("./ffmpeg.exe") else "ffmpeg"
-                    raw_audio = discord.FFmpegPCMAudio(filename, executable=ffmpeg_executable, options=f'-af atempo={speed}')
-                    audio_source = discord.PCMVolumeTransformer(raw_audio, volume=0.25)
-                    vc.play(audio_source, after=after_playing)
-                except Exception as e:
-                    print(f"❌ 퇴장 TTS 생성 실패: {e}")
+                ffmpeg_executable = "./ffmpeg.exe" if os.path.exists("./ffmpeg.exe") else "ffmpeg"
+                raw_audio = discord.FFmpegPCMAudio(filename, executable=ffmpeg_executable, options=f'-af atempo={speed}')
+                audio_source = discord.PCMVolumeTransformer(raw_audio, volume=0.25)
+                vc.play(audio_source, after=after_playing)
+            except Exception as e:
+                print(f"❌ 퇴장 TTS 생성 실패: {e}")
 
     if not vc or not vc.is_connected():
         return
