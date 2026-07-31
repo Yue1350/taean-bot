@@ -7,6 +7,7 @@ from google.oauth2 import service_account
 
 site.main()
 load_dotenv()
+keep-alive() #new
 
 google_credentials = {
     "type": "service_account",
