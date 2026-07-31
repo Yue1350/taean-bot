@@ -8,10 +8,6 @@ from google.oauth2 import service_account
 site.main()
 load_dotenv()
 
-private_key = os.getenv("private_key", "")
-if private_key:
-    private_key = private_key.replace("\\n", "\n")
-
 google_credentials = {
     "type": "service_account",
     "project_id": "gen-lang-client-0463073512",
@@ -71,7 +67,7 @@ class VoiceSelectView(discord.ui.Select):
         settings = self.bot.get_guild_settings(self.guild_id)
         settings['voice_name'] = self.values[0]
         selected_label = next((opt.label for opt in self.options if opt.value == self.values[0]), self.values[0])
-        await interaction.response.send_message(f"✅ TTS 목소리가 `{selected_label}`(으)로 변경되었어!", ephemeral=True)
+        await interaction.response.send_message(f"✅ TTS 목소리가 `{selected_label}`(으)로 변경되었습니다.", ephemeral=True)
 
 # --- 속도 선택 셀렉트 메뉴 ---
 class SpeedSelectView(discord.ui.Select):
@@ -92,7 +88,7 @@ class SpeedSelectView(discord.ui.Select):
         settings = self.bot.get_guild_settings(self.guild_id)
         settings['speed'] = self.values[0]
         selected_label = next((opt.label for opt in self.options if opt.value == self.values[0]), self.values[0])
-        await interaction.response.send_message(f"✅ TTS 속도가 `{selected_label}배속`(으)로 변경되었어!", ephemeral=True)
+        await interaction.response.send_message(f"✅ TTS 속도가 `{selected_label}배속`(으)로 변경되었습니다.", ephemeral=True)
 
 # --- TTS 설정 뷰 ---
 class TTSSettingsView(discord.ui.View):
@@ -171,7 +167,7 @@ def generate_google_tts(client, text, voice_name):
 @bot.tree.command(name="입장", description="TTS 봇을 음성 채널에 수동으로 입장시킵니다.")
 async def join_vc(interaction: discord.Interaction):
     if not interaction.user.voice or not interaction.user.voice.channel:
-        await interaction.response.send_message("❌ 먼저 통화방(음성 채널)에 들어가 있어야 해!", ephemeral=True)
+        await interaction.response.send_message("❌ 먼저 통화방(음성 채널)에 들어가 계셔야 합니다.", ephemeral=True)
         return
 
     voice_channel = interaction.user.voice.channel
@@ -186,7 +182,7 @@ async def join_vc(interaction: discord.Interaction):
     if not settings.get('channel_id'):
         settings['temp_channel_id'] = interaction.channel_id
 
-    await interaction.response.send_message(f"🔊 {voice_channel.mention} 채널에 입장했어!", ephemeral=True)
+    await interaction.response.send_message(f"🔊 {voice_channel.mention} 채널에 입장하였습니다.", ephemeral=True)
 
 @bot.tree.command(name="퇴장", description="봇을 음성 채널에서 내보냅니다.")
 async def leave_vc(interaction: discord.Interaction):
@@ -195,9 +191,9 @@ async def leave_vc(interaction: discord.Interaction):
         await vc.disconnect()
         settings = bot.get_guild_settings(interaction.guild_id)
         settings['temp_channel_id'] = None
-        await interaction.response.send_message("👋 음성 채널에서 퇴장했어!", ephemeral=True)
+        await interaction.response.send_message("👋 음성 채널에서 퇴장하였습니다.", ephemeral=True)
     else:
-        await interaction.response.send_message("❌ 현재 통화방에 들어가 있지 않아!", ephemeral=True)
+        await interaction.response.send_message("❌ 현재 통화방에 들어가 있지 않습니다.", ephemeral=True)
 
 @bot.tree.command(name="tts설정", description="TTS 목소리, 속도 및 전용 읽기 채널을 설정합니다.")
 async def config_tts(interaction: discord.Interaction):
@@ -205,7 +201,7 @@ async def config_tts(interaction: discord.Interaction):
     is_admin = permissions.manage_channels or permissions.administrator
 
     view = TTSSettingsView(bot, interaction.guild_id, is_admin=is_admin)
-    await interaction.response.send_message("⚙️ 변경할 옵션을 아래 목록에서 선택해 줘:", view=view, ephemeral=True)
+    await interaction.response.send_message("⚙️ 변경할 옵션을 아래 목록에서 선택해 주세요.", view=view, ephemeral=True)
 
 # --- 메시지 감지 영역 ---
 
