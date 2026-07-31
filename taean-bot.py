@@ -8,8 +8,20 @@ from keep_alive import keep_alive
 
 site.main()
 load_dotenv()
-
 keep_alive()
+
+# --- Initial.json 불러오기 함수 ---
+def load_initial_replacements():
+    filename = "Initial.json"
+    if os.path.exists(filename):
+        try:
+            with open(filename, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception as e:
+            print(f"❌ Initial.json 로드 실패: {e}")
+    return {}
+
+INITIAL_REPLACEMENTS = load_initial_replacements()
 
 private_key = os.getenv("private_key", "")
 if private_key:
@@ -119,7 +131,6 @@ class TTSBot(discord.Client):
         super().__init__(intents=intents)
         self.tree = app_commands.CommandTree(self)
         self.guild_settings = {}
-        # googleapiclient 모듈 방식으로 클라이언트 생성
         self.tts_client = build('texttospeech', 'v1', credentials=credentials)
 
     def get_guild_settings(self, guild_id):
@@ -161,7 +172,6 @@ async def delete_message_after_delay(message, delay=10):
     except Exception as e:
         print(f"❌ 메시지 자동 삭제 실패: {e}")
 
-# REST API 호출 방식으로 TTS 음성 생성 함수 수정
 def generate_google_tts(client, text, voice_name):
     body = {
         'input': {'text': text},
@@ -318,15 +328,10 @@ async def on_message(message):
         else:
             tts_text = re.sub(url_pattern, "링크", tts_text)
 
-    # 초성 및 줄임말 필터링
-    tts_text = re.sub(r'\b(ㅎㅇ)\b', '하이', tts_text)
-    tts_text = re.sub(r'\b(ㅂㅇ)\b', '바이', tts_text)
-    tts_text = re.sub(r'\b(ㄳ|ㄱㅅ)\b', '감사', tts_text)
-    tts_text = re.sub(r'\b(ㄷㄷ)\b', '덜덜', tts_text)
-    tts_text = re.sub(r'\b(ㅇㅈ)\b', '인정', tts_text)
-    tts_text = re.sub(r'\b(ㄹㅇ)\b', '레알', tts_text)
-    tts_text = re.sub(r'\b(ㅅㄱ)\b', '수고', tts_text)
-    tts_text = re.sub(r'\b(\?)\b', '응?', tts_text)
+    # --- Initial.json 기반 초성 및 줄임말 치환 ---
+    for target, replacement in INITIAL_REPLACEMENTS.items():
+        pattern = rf"\b({re.escape(target)})\b"
+        tts_text = re.sub(pattern, replacement, tts_text)
 
     filename = f"tts_{message.id}.mp3"
     try:
