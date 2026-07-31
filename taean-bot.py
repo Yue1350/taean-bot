@@ -273,7 +273,7 @@ async def join_vc(interaction: discord.Interaction):
     if not settings.get('channel_id'):
         settings['temp_channel_id'] = interaction.channel_id
 
-    await interaction.response.send_message(f"🔊 {voice_channel.mention} 채널에 입장하였습니다.", ephemeral=True)
+    await interaction.response.send_message(f"🔊 {voice_channel.mention} 채널이 설정되었습니다.", ephemeral=True)
 
 @bot.tree.command(name="퇴장", description="봇을 음성 채널에서 내보냅니다.")
 async def leave_vc(interaction: discord.Interaction):
@@ -397,9 +397,17 @@ async def on_message(message):
         else:
             tts_text = re.sub(url_pattern, "링크", tts_text)
 
-    for target, replacement in INITIAL_REPLACEMENTS.items():
-        pattern = rf"\b({re.escape(target)})\b"
-        tts_text = re.sub(pattern, replacement, tts_text)
+    # --- Initial.json 기반 초성 및 단어 치환 로직 (특수문자 단독 포함 안전 처리) ---
+    words = tts_text.split()
+    replaced_words = []
+    for word in words:
+        clean_word = re.sub(r'[^가-힣a-zA-Z0-9?]', '', word)
+        if clean_word in INITIAL_REPLACEMENTS:
+            replaced_word = word.replace(clean_word, INITIAL_REPLACEMENTS[clean_word])
+            replaced_words.append(replaced_word)
+        else:
+            replaced_words.append(word)
+    tts_text = " ".join(replaced_words)
 
     filename = f"tts_{message.id}.mp3"
     try:
