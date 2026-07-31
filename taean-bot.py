@@ -156,18 +156,84 @@ async def on_ready():
     await bot.change_presence(status=discord.Status.online, activity=activity)
     print(f"✅ 로그인 성공: {bot.user.name} (상태 메시지 설정 완료)")
 
-# --- 음성 상태 변경 이벤트 (혼자 남았을 때 자동 퇴장 처리) ---
+# --- 음성 상태 변경 이벤트 (입장/퇴장 안내 및 혼자 남았을 때 자동 퇴장 처리) ---
 @bot.event
 async def on_voice_state_update(member, before, after):
+    if member.bot:
+        return
+
+    settings = bot.get_guild_settings(member.guild.id)
+    target_channel_id = settings.get('channel_id') or settings.get('temp_channel_id')
     vc = member.guild.voice_client
+
+    if before.channel is None and after.channel is not None:
+        if vc and after.channel == vc.channel and target_channel_id:
+            channel = member.guild.get_channel(target_channel_id)
+            if channel:
+                tts_text = f"{member.display_name} 어하"
+                msg = await channel.send(tts_text)
+                asyncio.create_task(delete_message_after_delay(msg, 10))
+
+                voice_name = settings.get('voice_name', 'ko-KR-Neural2-A')
+                speed = settings.get('speed', '1.0')
+                filename = f"tts_join_{member.id}_{int(asyncio.get_event_loop().time())}.mp3"
+
+                try:
+                    audio_content = generate_google_tts(bot.tts_client, tts_text, voice_name)
+                    with open(filename, "wb") as out:
+                        out.write(audio_content)
+
+                    while vc.is_playing():
+                        await asyncio.sleep(0.5)
+
+                    def after_playing(error):
+                        if error: print(f"❌ 재생 중 오류 발생: {error}")
+                        asyncio.run_coroutine_threadsafe(remove_file_safely(filename), bot.loop)
+
+                    ffmpeg_executable = "./ffmpeg.exe" if os.path.exists("./ffmpeg.exe") else "ffmpeg"
+                    raw_audio = discord.FFmpegPCMAudio(filename, executable=ffmpeg_executable, options=f'-af atempo={speed}')
+                    audio_source = discord.PCMVolumeTransformer(raw_audio, volume=0.25)
+                    vc.play(audio_source, after=after_playing)
+                except Exception as e:
+                    print(f"❌ 입장 TTS 생성 실패: {e}")
+
+    elif before.channel is not None and after.channel is None:
+        if vc and before.channel == vc.channel and target_channel_id:
+            channel = member.guild.get_channel(target_channel_id)
+            if channel:
+                tts_text = f"{member.display_name} 어바"
+                msg = await channel.send(tts_text)
+                asyncio.create_task(delete_message_after_delay(msg, 10))
+
+                voice_name = settings.get('voice_name', 'ko-KR-Neural2-A')
+                speed = settings.get('speed', '1.0')
+                filename = f"tts_leave_{member.id}_{int(asyncio.get_event_loop().time())}.mp3"
+
+                try:
+                    audio_content = generate_google_tts(bot.tts_client, tts_text, voice_name)
+                    with open(filename, "wb") as out:
+                        out.write(audio_content)
+
+                    while vc.is_playing():
+                        await asyncio.sleep(0.5)
+
+                    def after_playing(error):
+                        if error: print(f"❌ 재생 중 오류 발생: {error}")
+                        asyncio.run_coroutine_threadsafe(remove_file_safely(filename), bot.loop)
+
+                    ffmpeg_executable = "./ffmpeg.exe" if os.path.exists("./ffmpeg.exe") else "ffmpeg"
+                    raw_audio = discord.FFmpegPCMAudio(filename, executable=ffmpeg_executable, options=f'-af atempo={speed}')
+                    audio_source = discord.PCMVolumeTransformer(raw_audio, volume=0.25)
+                    vc.play(audio_source, after=after_playing)
+                except Exception as e:
+                    print(f"❌ 퇴장 TTS 생성 실패: {e}")
+
     if not vc or not vc.is_connected():
         return
 
-    # 봇이 속한 채널에 사람(봇 제외)이 아무도 없는지 확인
     human_members = [m for m in vc.channel.members if not m.bot]
     if len(human_members) == 0:
         await vc.disconnect()
-        settings = bot.get_guild_settings(member.guild.id)
         settings['temp_channel_id'] = None
         print(f"👋 {member.guild.name} 서버 음성 채널에 아무도 없어서 자동 퇴장했습니다.")
 
@@ -254,7 +320,6 @@ async def on_message(message):
             asyncio.create_task(delete_message_after_delay(message, 10))
         return
 
-    # 커스텀 이모지 처리
     custom_emojis = re.findall(r"<(a?):(\w+):(\d+)>", message.content)
     if custom_emojis:
         try:
@@ -292,7 +357,6 @@ async def on_message(message):
 
                         while voice_client.is_playing():
                             await asyncio.sleep(0.5)
-                            await asyncio.sleep(0.1)
 
                         def after_playing(error):
                             if error: print(f"❌ 재생 중 오류 발생: {error}")
@@ -308,15 +372,12 @@ async def on_message(message):
         except Exception as e:
             print(f"❌ 이모지 전송 실패: {e}")
 
-    # 일반 텍스트 및 지정 채널 판별
     if message.channel.id != target_channel_id: 
         return
 
     asyncio.create_task(delete_message_after_delay(message, 10))
     voice_client = message.guild.voice_client
 
-    if not voice_client:
-    # 봇이 음성 채널에 안 들어가 있다면 작성자의 채널로 연결
     if not voice_client or not voice_client.is_connected():
         if message.author.voice:
             voice_client = await message.author.voice.channel.connect(reconnect=True, timeout=60.0)
@@ -347,7 +408,6 @@ async def on_message(message):
         else:
             tts_text = re.sub(url_pattern, "링크", tts_text)
 
-    # --- Initial.json 기반 초성 및 줄임말 치환 ---
     for target, replacement in INITIAL_REPLACEMENTS.items():
         pattern = rf"\b({re.escape(target)})\b"
         tts_text = re.sub(pattern, replacement, tts_text)
@@ -361,10 +421,8 @@ async def on_message(message):
         print(f"❌ 구글 TTS 생성 실패: {e}")
         return
 
-    # 이전 오디오 재생이 끝날 때까지 대기
     while voice_client.is_playing(): 
         await asyncio.sleep(0.5)
-        await asyncio.sleep(0.1)
 
     def after_playing(error):
         if error: print(f"❌ 재생 중 오류 발생: {error}")
