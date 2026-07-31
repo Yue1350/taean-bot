@@ -1,28 +1,114 @@
-import sys, subprocess, os, site, json, re, asyncio, discord
+import sys, subprocess, os, site, json, re, asyncio
+import discord
 from discord import app_commands
 from dotenv import load_dotenv
 from google.cloud import texttospeech
+from google.oauth2 import service_account
 
 site.main()
 load_dotenv()
 
+private_key = os.getenv("private_key", "")
+if private_key:
+    private_key = private_key.replace("\\n", "\n")
+
 google_credentials = {
-    "type": "service_account"
+    "type": "service_account",
     "project_id": "gen-lang-client-0463073512",
     "private_key_id": os.getenv("private_key_id"),
-    "private_key": os.getenv("private_key").replace("\\n", "\n"),  # 줄바꿈 문자 복원
+    "private_key": os.getenv("private_key"),
     "client_email": "tts-bot-key@gen-lang-client-0463073512.iam.gserviceaccount.com",
     "client_id": "102784716861828821559",
-    "auth_uri": os.getenv("auth_uri"),
-    "token_uri": os.getenv("token_uri"),
-    "auth_provider_x509_cert_url": os.getenv("auth_provider_x509_cert_url"),
+    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+    "token_uri": "https://oauth2.googleapis.com/token",
+    "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
     "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/tts-bot-key%40gen-lang-client-0463073512.iam.gserviceaccount.com",
     "universe_domain": "googleapis.com"
 }
 
-# 구글 TTS 클라이언트에 인증 정보 직접 주입
-from google.oauth2 import service_account
 credentials = service_account.Credentials.from_service_account_info(google_credentials)
+
+# --- 관리자 전용 채널 선택 셀렉트 메뉴 ---
+class ChannelSelectView(discord.ui.ChannelSelect):
+    def __init__(self, bot, guild_id, current_channel_id=None):
+        super().__init__(
+            channel_types=[discord.ChannelType.text],
+            placeholder="📢 TTS 읽기 채널을 선택해 주세요"
+        )
+        self.bot = bot
+        self.guild_id = guild_id
+
+        # 선택된 기본 채널 설정 (버전별 안전한 지원)
+        if current_channel_id:
+            try:
+                self.default_values.append(
+                    discord.SelectDefaultValue(id=current_channel_id, type=discord.SelectDefaultValueType.channel)
+                )
+            except (AttributeError, TypeError):
+                pass
+
+    async def callback(self, interaction: discord.Interaction):
+        selected_channel = self.values[0]
+        settings = self.bot.get_guild_settings(self.guild_id)
+        settings['channel_id'] = selected_channel.id
+        settings['temp_channel_id'] = None
+        await interaction.response.send_message(f"✅ {selected_channel.mention} 채널이 TTS 읽기 채널로 설정되었습니다.", ephemeral=True)
+
+# --- 목소리 선택 셀렉트 메뉴 ---
+class VoiceSelectView(discord.ui.Select):
+    def __init__(self, bot, guild_id, current_voice):
+        options = [
+            discord.SelectOption(label="여성 1", value="ko-KR-Neural2-A", default=(current_voice == "ko-KR-Neural2-A")),
+            discord.SelectOption(label="여성 2", value="ko-KR-Neural2-B", default=(current_voice == "ko-KR-Neural2-B")),
+            discord.SelectOption(label="남성 1", value="ko-KR-Neural2-C", default=(current_voice == "ko-KR-Neural2-C")),
+            discord.SelectOption(label="남성 2", value="ko-KR-Neural2-D", default=(current_voice == "ko-KR-Neural2-D")),
+        ]
+        super().__init__(placeholder="🎤 목소리를 선택해 주세요", options=options)
+        self.bot = bot
+        self.guild_id = guild_id
+
+    async def callback(self, interaction: discord.Interaction):
+        settings = self.bot.get_guild_settings(self.guild_id)
+        settings['voice_name'] = self.values[0]
+        selected_label = next((opt.label for opt in self.options if opt.value == self.values[0]), self.values[0])
+        await interaction.response.send_message(f"✅ TTS 목소리가 `{selected_label}`(으)로 변경되었어!", ephemeral=True)
+
+# --- 속도 선택 셀렉트 메뉴 ---
+class SpeedSelectView(discord.ui.Select):
+    def __init__(self, bot, guild_id, current_speed):
+        speeds = [
+            ("0.25", "0.25"), ("0.5", "0.5"), ("0.75", "0.75"), ("1", "1.0"),
+            ("1.25", "1.25"), ("1.5", "1.5"), ("1.75", "1.75"), ("2", "2.0")
+        ]
+        options = [
+            discord.SelectOption(label=label, value=val, default=(current_speed == val))
+            for label, val in speeds
+        ]
+        super().__init__(placeholder="⚡ 재생 속도를 선택해 주세요", options=options)
+        self.bot = bot
+        self.guild_id = guild_id
+
+    async def callback(self, interaction: discord.Interaction):
+        settings = self.bot.get_guild_settings(self.guild_id)
+        settings['speed'] = self.values[0]
+        selected_label = next((opt.label for opt in self.options if opt.value == self.values[0]), self.values[0])
+        await interaction.response.send_message(f"✅ TTS 속도가 `{selected_label}배속`(으)로 변경되었어!", ephemeral=True)
+
+# --- TTS 설정 뷰 ---
+class TTSSettingsView(discord.ui.View):
+    def __init__(self, bot, guild_id, is_admin=False):
+        super().__init__(timeout=60)
+        self.bot = bot
+        self.guild_id = guild_id
+        
+        settings = bot.get_guild_settings(guild_id)
+        
+        if is_admin:
+            self.add_item(ChannelSelectView(bot, guild_id, settings.get('channel_id')))
+        
+        self.add_item(VoiceSelectView(bot, guild_id, settings.get('voice_name', 'ko-KR-Neural2-A')))
+        self.add_item(SpeedSelectView(bot, guild_id, settings.get('speed', '1.0')))
+
 class TTSBot(discord.Client):
     def __init__(self):
         intents = discord.Intents.default()
@@ -30,15 +116,26 @@ class TTSBot(discord.Client):
         intents.voice_states = True
         super().__init__(intents=intents)
         self.tree = app_commands.CommandTree(self)
-        self.guild_settings = {} # {guild_id: {'channel_id': int, 'voice_name': str, 'speed': str, 'read_non_vc': bool}}
+        self.guild_settings = {}
         self.tts_client = texttospeech.TextToSpeechClient(credentials=credentials)
+
+    def get_guild_settings(self, guild_id):
+        if guild_id not in self.guild_settings:
+            # 기본 설정: 여성 1 (ko-KR-Neural2-A), 1배속 ('1.0')
+            self.guild_settings[guild_id] = {
+                'voice_name': 'ko-KR-Neural2-A',
+                'speed': '1.0',
+                'read_non_vc': False,
+                'channel_id': None,
+                'temp_channel_id': None
+            }
+        return self.guild_settings[guild_id]
 
     async def setup_hook(self):
         await self.tree.sync()
 
 bot = TTSBot()
 
-# --- 봇 준비 완료 시 상태 메시지 설정 ---
 @bot.event
 async def on_ready():
     activity = discord.Game(name="태안 촌놈들 관리 중")
@@ -57,10 +154,8 @@ async def delete_message_after_delay(message, delay=10):
     await asyncio.sleep(delay)
     try:
         await message.delete()
-    except discord.NotFound:
+    except (discord.NotFound, discord.Forbidden):
         pass
-    except discord.Forbidden:
-        print("❌ 메시지 삭제 권한이 없습니다.")
     except Exception as e:
         print(f"❌ 메시지 자동 삭제 실패: {e}")
 
@@ -71,42 +166,59 @@ def generate_google_tts(client, text, voice_name):
     response = client.synthesize_speech(input=synthesis_input, voice=voice, audio_config=audio_config)
     return response.audio_content
 
-# --- 슬래시 명령어 설정 ---
-@bot.tree.command(name="tts설정", description="현재 채널을 TTS 읽기 채널로 지정합니다.")
-async def set_tts_channel(interaction: discord.Interaction):
-    guild_id = interaction.guild_id
-    if guild_id not in bot.guild_settings:
-        bot.guild_settings[guild_id] = {
-            'voice_name': 'ko-KR-Neural2-A',
-            'speed': '1.0',
-            'read_non_vc': False
-        }
-    bot.guild_settings[guild_id]['channel_id'] = interaction.channel_id
-    await interaction.response.send_message(f"✅ {interaction.channel.mention} 채널이 TTS 읽기 채널로 설정되었습니다.", ephemeral=True)
+# --- 명령어 영역 ---
+
+@bot.tree.command(name="입장", description="TTS 봇을 음성 채널에 수동으로 입장시킵니다.")
+async def join_vc(interaction: discord.Interaction):
+    if not interaction.user.voice or not interaction.user.voice.channel:
+        await interaction.response.send_message("❌ 먼저 통화방(음성 채널)에 들어가 있어야 해!", ephemeral=True)
+        return
+
+    voice_channel = interaction.user.voice.channel
+    vc = interaction.guild.voice_client
+
+    if vc:
+        await vc.move_to(voice_channel)
+    else:
+        await voice_channel.connect(reconnect=True, timeout=60.0)
+
+    settings = bot.get_guild_settings(interaction.guild_id)
+    if not settings.get('channel_id'):
+        settings['temp_channel_id'] = interaction.channel_id
+
+    await interaction.response.send_message(f"🔊 {voice_channel.mention} 채널에 입장했어!", ephemeral=True)
 
 @bot.tree.command(name="퇴장", description="봇을 음성 채널에서 내보냅니다.")
 async def leave_vc(interaction: discord.Interaction):
     vc = interaction.guild.voice_client
-    if vc:
+    if vc and vc.is_connected():
         await vc.disconnect()
-        await interaction.response.send_message("👋 음성 채널에서 퇴장하였습니다.", ephemeral=True)
+        settings = bot.get_guild_settings(interaction.guild_id)
+        settings['temp_channel_id'] = None
+        await interaction.response.send_message("👋 음성 채널에서 퇴장했어!", ephemeral=True)
     else:
-        await interaction.response.send_message("❌ 연결된 음성 채널이 없습니다.", ephemeral=True)
+        await interaction.response.send_message("❌ 현재 통화방에 들어가 있지 않아!", ephemeral=True)
 
-# --- 메시지 이벤트 ---
+@bot.tree.command(name="tts설정", description="TTS 목소리, 속도 및 전용 읽기 채널을 설정합니다.")
+async def config_tts(interaction: discord.Interaction):
+    permissions = interaction.channel.permissions_for(interaction.user)
+    is_admin = permissions.manage_channels or permissions.administrator
+
+    view = TTSSettingsView(bot, interaction.guild_id, is_admin=is_admin)
+    await interaction.response.send_message("⚙️ 변경할 옵션을 아래 목록에서 선택해 줘:", view=view, ephemeral=True)
+
+# --- 메시지 감지 영역 ---
+
 @bot.event
 async def on_message(message):
-    # DM 메시지이거나 guild 정보가 없는 경우 무시
-    if message.guild is None:
+    if message.guild is None or (message.author.bot and message.webhook_id is None):
         return
 
-    if message.author.bot and message.webhook_id is None:
-        return
+    settings = bot.get_guild_settings(message.guild.id)
+    target_channel_id = settings.get('channel_id') or settings.get('temp_channel_id')
 
-    # 웹훅 메시지 삭제 처리
     if message.webhook_id is not None:
-        settings = bot.guild_settings.get(message.guild.id, {})
-        if message.channel.id == settings.get('channel_id'):
+        if message.channel.id == target_channel_id:
             asyncio.create_task(delete_message_after_delay(message, 10))
         return
 
@@ -133,8 +245,7 @@ async def on_message(message):
             )
             await webhook.delete()
 
-            settings = bot.guild_settings.get(message.guild.id, {})
-            if message.channel.id == settings.get('channel_id'):
+            if message.channel.id == target_channel_id:
                 voice_client = message.guild.voice_client
                 if voice_client and (message.author.voice and message.author.voice.channel == voice_client.channel or settings.get('read_non_vc')):
                     tts_text = f"{message.author.display_name}님이 이모지를 보냈습니다."
@@ -156,7 +267,6 @@ async def on_message(message):
 
                         ffmpeg_executable = "./ffmpeg.exe" if os.path.exists("./ffmpeg.exe") else "ffmpeg"
                         raw_audio = discord.FFmpegPCMAudio(filename, executable=ffmpeg_executable, options=f'-af atempo={speed}')
-                        # 기본 음량 25% (0.25) 설정
                         audio_source = discord.PCMVolumeTransformer(raw_audio, volume=0.25)
                         voice_client.play(audio_source, after=after_playing)
                     except Exception as e:
@@ -165,21 +275,16 @@ async def on_message(message):
         except Exception as e:
             print(f"❌ 이모지 전송 실패: {e}")
 
-    # TTS 일반 채널 메시지 처리
-    if message.guild.id not in bot.guild_settings: 
-        return
-        
-    settings = bot.guild_settings[message.guild.id]
-    if message.channel.id != settings.get('channel_id'): 
+    # 일반 텍스트 및 지정 채널 판별
+    if message.channel.id != target_channel_id: 
         return
 
     asyncio.create_task(delete_message_after_delay(message, 10))
     voice_client = message.guild.voice_client
     
-    # 음성 채널 입장 처리
     if not voice_client:
         if message.author.voice:
-            voice_client = await message.author.voice.channel.connect()
+            voice_client = await message.author.voice.channel.connect(reconnect=True, timeout=60.0)
         else:
             return
 
@@ -200,7 +305,6 @@ async def on_message(message):
         else:
             return
 
-    # URL 처리
     url_pattern = r'https?://[^\s]+'
     if re.search(url_pattern, tts_text):
         if re.fullmatch(url_pattern, tts_text):
@@ -208,13 +312,15 @@ async def on_message(message):
         else:
             tts_text = re.sub(url_pattern, "링크", tts_text)
 
-    # 약어 변환
+    # 초성 및 줄임말 필터링
     tts_text = re.sub(r'\b(ㅎㅇ)\b', '하이', tts_text)
     tts_text = re.sub(r'\b(ㅂㅇ)\b', '바이', tts_text)
     tts_text = re.sub(r'\b(ㄳ|ㄱㅅ)\b', '감사', tts_text)
     tts_text = re.sub(r'\b(ㄷㄷ)\b', '덜덜', tts_text)
     tts_text = re.sub(r'\b(ㅇㅈ)\b', '인정', tts_text)
     tts_text = re.sub(r'\b(ㄹㅇ)\b', '레알', tts_text)
+    tts_text = re.sub(r'\b(ㅅㄱ)\b', '수고', tts_text)
+    tts_text = re.sub(r'\b(\?)\b', '응?', tts_text)
 
     filename = f"tts_{message.id}.mp3"
     try:
@@ -234,7 +340,6 @@ async def on_message(message):
 
     ffmpeg_executable = "./ffmpeg.exe" if os.path.exists("./ffmpeg.exe") else "ffmpeg"
     raw_audio = discord.FFmpegPCMAudio(filename, executable=ffmpeg_executable, options=f"-af atempo={settings.get('speed', '1.0')}")
-    # 기본 음량 25% (0.25) 설정
     audio_source = discord.PCMVolumeTransformer(raw_audio, volume=0.25)
     voice_client.play(audio_source, after=after_playing)
 
