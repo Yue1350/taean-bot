@@ -1,19 +1,22 @@
-import sys, subprocess, os, site, json, re, asyncio
+import sys, subprocess, os, site, json, re, asyncio, base64
 import discord
 from discord import app_commands
 from dotenv import load_dotenv
-from google.cloud import texttospeech
+from googleapiclient.discovery import build
 from google.oauth2 import service_account
 
 site.main()
 load_dotenv()
-keep-alive() #new
+
+private_key = os.getenv("private_key", "")
+if private_key:
+    private_key = private_key.replace("\\n", "\n")
 
 google_credentials = {
     "type": "service_account",
     "project_id": "gen-lang-client-0463073512",
     "private_key_id": os.getenv("private_key_id"),
-    "private_key": os.getenv("private_key"),
+    "private_key": private_key,
     "client_email": "tts-bot-key@gen-lang-client-0463073512.iam.gserviceaccount.com",
     "client_id": "102784716861828821559",
     "auth_uri": "https://accounts.google.com/o/oauth2/auth",
@@ -35,7 +38,6 @@ class ChannelSelectView(discord.ui.ChannelSelect):
         self.bot = bot
         self.guild_id = guild_id
 
-        # 선택된 기본 채널 설정 (버전별 안전한 지원)
         if current_channel_id:
             try:
                 self.default_values.append(
@@ -114,11 +116,11 @@ class TTSBot(discord.Client):
         super().__init__(intents=intents)
         self.tree = app_commands.CommandTree(self)
         self.guild_settings = {}
-        self.tts_client = texttospeech.TextToSpeechClient(credentials=credentials)
+        # googleapiclient 모듈 방식으로 클라이언트 생성
+        self.tts_client = build('texttospeech', 'v1', credentials=credentials)
 
     def get_guild_settings(self, guild_id):
         if guild_id not in self.guild_settings:
-            # 기본 설정: 여성 1 (ko-KR-Neural2-A), 1배속 ('1.0')
             self.guild_settings[guild_id] = {
                 'voice_name': 'ko-KR-Neural2-A',
                 'speed': '1.0',
@@ -156,12 +158,16 @@ async def delete_message_after_delay(message, delay=10):
     except Exception as e:
         print(f"❌ 메시지 자동 삭제 실패: {e}")
 
+# REST API 호출 방식으로 TTS 음성 생성 함수 수정
 def generate_google_tts(client, text, voice_name):
-    synthesis_input = texttospeech.SynthesisInput(text=text)
-    voice = texttospeech.VoiceSelectionParams(language_code="ko-KR", name=voice_name)
-    audio_config = texttospeech.AudioConfig(audio_encoding=texttospeech.AudioEncoding.MP3)
-    response = client.synthesize_speech(input=synthesis_input, voice=voice, audio_config=audio_config)
-    return response.audio_content
+    body = {
+        'input': {'text': text},
+        'voice': {'languageCode': 'ko-KR', 'name': voice_name},
+        'audioConfig': {'audioEncoding': 'MP3'}
+    }
+    request = client.text().synthesize(body=body)
+    response = request.execute()
+    return base64.b64decode(response['audioContent'])
 
 # --- 명령어 영역 ---
 
