@@ -1,9 +1,9 @@
-import sys, subprocess, os, site, json, re
+import sys, subprocess, os, site, json, re, asyncio
 site.main()
 
 import discord
 from discord import app_commands
-import asyncio
+from dotenv import load_dotenv
 
 # 구글 클라우드 TTS 라이브러리
 from google.cloud import texttospeech
@@ -226,7 +226,5 @@ async def on_message(message):
     audio_source = discord.PCMVolumeTransformer(raw_audio, volume=0.25)
     voice_client.play(audio_source, after=after_playing)
 
-with open('config.json', 'r', encoding='utf-8') as f:
-    config = json.load(f)
-
-bot.run(config['token'])
+token = os.getenv("DISCORD_TOKEN")
+bot.run(token)
