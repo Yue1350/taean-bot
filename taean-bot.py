@@ -4,9 +4,12 @@ from discord import app_commands
 from dotenv import load_dotenv
 from googleapiclient.discovery import build
 from google.oauth2 import service_account
+from keep_alive import keep_alive
 
 site.main()
 load_dotenv()
+
+keep_alive()
 
 private_key = os.getenv("private_key", "")
 if private_key:
