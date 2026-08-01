@@ -388,9 +388,9 @@ async def leave_vc(interaction: discord.Interaction):
 # --- 채널 생성 / 지정 / 해제 통합 명령어 ---
 @bot.tree.command(name="tts채널", description="TTS 전용 채널을 생성, 지정 또는 해제합니다.")
 @app_commands.choices(action=[
-    app_commands.Choice(name="생성 (새로운 TTS 전용 채널 자동 생성 및 지정)", value="create"),
-    app_commands.Choice(name="지정 (현재 채널을 𝗧𝗧𝗦로 변경 후 TTS 채널 지정)", value="set"),
-    app_commands.Choice(name="해제 (고정 TTS 채널 해제 및 원래 이름 복구)", value="clear")
+    app_commands.Choice(name="생성", value="create"),
+    app_commands.Choice(name="지정", value="set"),
+    app_commands.Choice(name="해제", value="clear")
 ])
 async def set_tts_channel(interaction: discord.Interaction, action: str):
     permissions = interaction.channel.permissions_for(interaction.user)
