@@ -1,16 +1,9 @@
-# Discord Bot Core
 discord.py>=2.3.0
-
-# Google Cloud Text-to-Speech API (REST API 호출 방식)
 google-api-python-client
 google-auth>=2.20.0
-
-# Environment variables
 python-dotenv>=1.0.0
-
-# Audio & Voice support (E2EE 암호화 라이브러리 포함)
 PyNaCl>=1.5.0
 davey
-
-# Keep Alive Server
 flask
+fire
+typecast
