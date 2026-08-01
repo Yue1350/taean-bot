@@ -427,7 +427,7 @@ async def set_tts_channel(interaction: discord.Interaction, action: str):
             settings['temp_channel_id'] = None
 
             await interaction.channel.edit(name="𝗧𝗧𝗦", reason="TTS 채널 지정으로 인한 이름 변경")
-            await interaction.followup.send(f"✅ {interaction.channel.mention} 채널이 `𝗧𝗧𝗦`로 변경되었으며 고정 TTS 채널로 지정되었습니다! (이전 이름: `{original_name}`)", ephemeral=True)
+            await interaction.followup.send(f"✅ {interaction.channel.mention} 채널이 `𝗧𝗧𝗦`로 변경되었으며 TTS 채널로 지정되었습니다! (이전 이름: `{original_name}`)", ephemeral=True)
         except discord.Forbidden:
             await interaction.followup.send("❌ 봇에게 '채널 관리(Manage Channels)' 권한이 없어 채널 이름을 변경하지 못했습니다.", ephemeral=True)
         except Exception as e:
@@ -450,7 +450,7 @@ async def set_tts_channel(interaction: discord.Interaction, action: str):
 
         settings['channel_id'] = None
         settings['original_channel_name'] = None
-        await interaction.followup.send("✅ 고정 TTS 채널 설정이 해제되었으며 원래 이름으로 복구되었습니다.", ephemeral=True)
+        await interaction.followup.send("✅ TTS 채널 설정이 해제되었으며 원래 이름으로 복구되었습니다.", ephemeral=True)
 
 @bot.tree.command(name="tts설정", description="TTS 목소리, 속도, 피치, 감정 및 강도를 설정합니다.")
 async def config_tts(interaction: discord.Interaction):
