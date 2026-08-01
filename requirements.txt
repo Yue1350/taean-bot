@@ -7,3 +7,4 @@ davey
 flask
 fire
 typecast-python
+korean-romanizer
