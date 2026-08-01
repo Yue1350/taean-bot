@@ -32,12 +32,12 @@ INITIAL_REPLACEMENTS = {
     "ㅇㅋ": "오키"
 }
 
-# --- Typecast API 동기 요청 함수 (asyncio.to_thread로 실행) ---
+# --- Typecast API 동기 요청 함수 ---
 def generate_typecast_tts(text: str, actor_id: str, speed: str) -> bytes:
     if not TTS_API:
         raise ValueError("TTS_API가 설정되지 않았습니다.")
 
-    url = "https://typecast.ai/api/v1/synth"
+    url = "https://typecast.ai/api/speak"
     headers = {
         "Authorization": f"Bearer {TTS_API}",
         "Content-Type": "application/json"
@@ -47,30 +47,45 @@ def generate_typecast_tts(text: str, actor_id: str, speed: str) -> bytes:
         "text": text,
         "actor_id": actor_id,
         "xspeed": float(speed),
-        "model_version": "latest"
+        "lang": "auto",
+        "max_wait_time": 60
     }
 
     # 1. 음성 합성 요청
     response = requests.post(url, json=payload, headers=headers)
     response.raise_for_status()
     data = response.json()
-    synth_id = data["result"]["synth_id"]
+    
+    result = data.get("result", {})
+    
+    # 즉시 speak_url이 반환된 경우
+    audio_url = result.get("speak_url") or result.get("audio_download_url")
+    
+    # 폴링이 필요한 경우
+    if not audio_url:
+        speak_id = result.get("speak_id") or result.get("synth_id")
+        if not speak_id:
+            raise Exception(f"Typecast 응답 오류: {data}")
 
-    # 2. 결과 폴링 대기
-    poll_url = f"https://typecast.ai/api/v1/synth/{synth_id}"
-    while True:
-        poll_res = requests.get(poll_url, headers=headers).json()
-        status = poll_res["result"]["status"]
+        poll_url = f"https://typecast.ai/api/speak/{speak_id}"
         
-        if status == "done":
-            audio_url = poll_res["result"]["audio_url"]
-            break
-        elif status == "failed":
-            raise Exception("Typecast TTS 생성 실패")
-        
-        time.sleep(0.3)
+        for _ in range(30):  # 최대 15초 대기
+            poll_res = requests.get(poll_url, headers=headers).json()
+            poll_result = poll_res.get("result", {})
+            status = poll_result.get("status")
+            
+            if status == "done":
+                audio_url = poll_result.get("speak_url") or poll_result.get("audio_download_url")
+                break
+            elif status == "failed":
+                raise Exception("Typecast TTS 생성 실패")
+            
+            time.sleep(0.5)
 
-    # 3. 음성 파일 다운로드
+    if not audio_url:
+        raise Exception("오디오 URL을 가져오지 못했습니다.")
+
+    # 2. 음성 파일 다운로드
     audio_bytes = requests.get(audio_url).content
     return audio_bytes
 
@@ -101,30 +116,16 @@ class ChannelSelectView(discord.ui.ChannelSelect):
         await interaction.response.send_message(f"✅ {selected_channel.mention} 채널이 TTS 채널로 설정되었습니다.", ephemeral=True)
 
 
-# --- 목소리 선택 셀렉트 메뉴 (Typecast 배우 ID 적용) ---
+# --- 목소리 선택 셀렉트 메뉴 (찬구 전용) ---
 class VoiceSelectView(discord.ui.Select):
     def __init__(self, bot, guild_id, current_voice):
         options = [
-            # 여성
-            discord.SelectOption(label="여성 - 하은 (밝은 나레이션)", value="60a34b22c0199e46950db8ca", default=(current_voice == "60a34b22c0199e46950db8ca")),
-            discord.SelectOption(label="여성 - 서연 (차분한 대화)", value="60cb0958a36c5d1cfd4ff4bf", default=(current_voice == "60cb0958a36c5d1cfd4ff4bf")),
-            discord.SelectOption(label="여성 - 신애 (뉴스/아나운서)", value="5e786b86d9a184131df33db9", default=(current_voice == "5e786b86d9a184131df33db9")),
-            discord.SelectOption(label="여성 - 수진 (친근한 라디오)", value="5ea78d8a5717ad2eb086df1e", default=(current_voice == "5ea78d8a5717ad2eb086df1e")),
-            
-            # 남성
-            discord.SelectOption(label="남성 - 찬구", value="tc_5c547544fcfee90007fed455", default=(current_voice == "tc_5c547544fcfee90007fed455")),
-            discord.SelectOption(label="남성 - 찬우 (단정한 나레이션)", value="60f15c13b2e59174dfd924dd", default=(current_voice == "60f15c13b2e59174dfd924dd")),
-            discord.SelectOption(label="남성 - 민호 (신뢰감 있는 중저음)", value="6135ca1029c1d3c0b05b3ff7", default=(current_voice == "6135ca1029c1d3c0b05b3ff7")),
-            discord.SelectOption(label="남성 - 도현 (깔끔한 오디오북)", value="5f17d7b00344d564cecf1807", default=(current_voice == "5f17d7b00344d564cecf1807")),
-            discord.SelectOption(label="남성 - 진호 (다큐멘터리)", value="5ed703c393bcff6b14777d01", default=(current_voice == "5ed703c393bcff6b14777d01")),
-            
-            # 어린이 / 캐릭터
-            discord.SelectOption(label="어린이 - 뚜루 (귀여운 여아)", value="5eb10b9cd1d37b12d5cdfa85", default=(current_voice == "5eb10b9cd1d37b12d5cdfa85")),
-            discord.SelectOption(label="어린이 - 재호 (장난기 있는 남아)", value="5f98e6c7ea6bf46c3dd24ee6", default=(current_voice == "5f98e6c7ea6bf46c3dd24ee6")),
-            
-            # 노인
-            discord.SelectOption(label="할머니 - 덕자 (따뜻한 이야기)", value="5f866b1d4c207a6be3db4b8d", default=(current_voice == "5f866b1d4c207a6be3db4b8d")),
-            discord.SelectOption(label="할아버지 - 영식 (인자한 할아버지)", value="5f3a0fe68a88147743d2cbe2", default=(current_voice == "5f3a0fe68a88147743d2cbe2")),
+            discord.SelectOption(
+                label="남성 - 찬구", 
+                value="tc_5c547544fcfee90007fed455", 
+                default=(current_voice == "tc_5c547544fcfee90007fed455")
+            ),
+            # 추후 보내주시는 보이스 ID를 이곳에 추가하시면 됩니다.
         ]
         super().__init__(placeholder="목소리 설정", options=options)
         self.bot = bot
@@ -171,7 +172,7 @@ class TTSSettingsView(discord.ui.View):
         if is_admin:
             self.add_item(ChannelSelectView(bot, guild_id, settings.get('channel_id')))
 
-        self.add_item(VoiceSelectView(bot, guild_id, settings.get('voice_name', '60a34b22c0199e46950db8ca')))
+        self.add_item(VoiceSelectView(bot, guild_id, settings.get('voice_name', 'tc_5c547544fcfee90007fed455')))
         self.add_item(SpeedSelectView(bot, guild_id, settings.get('speed', '1.0')))
 
 
@@ -187,7 +188,7 @@ class TTSBot(discord.Client):
     def get_guild_settings(self, guild_id):
         if guild_id not in self.guild_settings:
             self.guild_settings[guild_id] = {
-                'voice_name': '60a34b22c0199e46950db8ca',
+                'voice_name': 'tc_5c547544fcfee90007fed455',
                 'speed': '1.0',
                 'read_non_vc': False,
                 'channel_id': None,
@@ -199,6 +200,24 @@ class TTSBot(discord.Client):
         await self.tree.sync()
 
 bot = TTSBot()
+
+async def play_tts(vc, filename):
+    """음성 재생 공통 함수"""
+    ffmpeg_executable = "./ffmpeg.exe" if os.path.exists("./ffmpeg.exe") else "ffmpeg"
+    raw_audio = discord.FFmpegPCMAudio(
+        filename,
+        executable=ffmpeg_executable,
+        options="-vn"
+    )
+    audio_source = discord.PCMVolumeTransformer(raw_audio, volume=0.8)
+    
+    def after_playing(error):
+        if error:
+            print(f"❌ 재생 중 오류 발생: {error}")
+        asyncio.run_coroutine_threadsafe(remove_file_safely(filename), bot.loop)
+
+    vc.play(audio_source, after=after_playing)
+
 
 @bot.event
 async def on_ready():
@@ -219,9 +238,9 @@ async def on_voice_state_update(member, before, after):
     if before.channel is None and after.channel is not None:
         if vc and after.channel == vc.channel:
             tts_text = f"{member.display_name} 어하"
-            voice_name = settings.get('voice_name', '60a34b22c0199e46950db8ca')
+            voice_name = settings.get('voice_name', 'tc_5c547544fcfee90007fed455')
             speed = settings.get('speed', '1.0')
-            filename = f"tts_join_{member.id}_{int(asyncio.get_event_loop().time())}.mp3"
+            filename = f"tts_join_{member.id}_{int(time.time())}.mp3"
 
             try:
                 audio_content = await asyncio.to_thread(generate_typecast_tts, tts_text, voice_name, speed)
@@ -229,25 +248,18 @@ async def on_voice_state_update(member, before, after):
                     out.write(audio_content)
 
                 while vc.is_playing():
-                    await asyncio.sleep(0.5)
+                    await asyncio.sleep(0.3)
 
-                def after_playing(error):
-                    if error: print(f"❌ 재생 중 오류 발생: {error}")
-                    asyncio.run_coroutine_threadsafe(remove_file_safely(filename), bot.loop)
-
-                ffmpeg_executable = "./ffmpeg.exe" if os.path.exists("./ffmpeg.exe") else "ffmpeg"
-                raw_audio = discord.FFmpegPCMAudio(filename, executable=ffmpeg_executable)
-                audio_source = discord.PCMVolumeTransformer(raw_audio, volume=0.25)
-                vc.play(audio_source, after=after_playing)
+                await play_tts(vc, filename)
             except Exception as e:
                 print(f"❌ 입장 TTS 생성 실패: {e}")
 
     elif before.channel is not None and after.channel is None:
         if vc and before.channel == vc.channel:
             tts_text = f"{member.display_name} 어바"
-            voice_name = settings.get('voice_name', '60a34b22c0199e46950db8ca')
+            voice_name = settings.get('voice_name', 'tc_5c547544fcfee90007fed455')
             speed = settings.get('speed', '1.0')
-            filename = f"tts_leave_{member.id}_{int(asyncio.get_event_loop().time())}.mp3"
+            filename = f"tts_leave_{member.id}_{int(time.time())}.mp3"
 
             try:
                 audio_content = await asyncio.to_thread(generate_typecast_tts, tts_text, voice_name, speed)
@@ -255,16 +267,9 @@ async def on_voice_state_update(member, before, after):
                     out.write(audio_content)
 
                 while vc.is_playing():
-                    await asyncio.sleep(0.5)
+                    await asyncio.sleep(0.3)
 
-                def after_playing(error):
-                    if error: print(f"❌ 재생 중 오류 발생: {error}")
-                    asyncio.run_coroutine_threadsafe(remove_file_safely(filename), bot.loop)
-
-                ffmpeg_executable = "./ffmpeg.exe" if os.path.exists("./ffmpeg.exe") else "ffmpeg"
-                raw_audio = discord.FFmpegPCMAudio(filename, executable=ffmpeg_executable)
-                audio_source = discord.PCMVolumeTransformer(raw_audio, volume=0.25)
-                vc.play(audio_source, after=after_playing)
+                await play_tts(vc, filename)
             except Exception as e:
                 print(f"❌ 퇴장 TTS 생성 실패: {e}")
 
@@ -378,7 +383,7 @@ async def on_message(message):
                 voice_client = message.guild.voice_client
                 if voice_client and (message.author.voice and message.author.voice.channel == voice_client.channel or settings.get('read_non_vc')):
                     tts_text = f"{message.author.display_name}님이 이모지를 보냈습니다."
-                    voice_name = settings.get('voice_name', '60a34b22c0199e46950db8ca')
+                    voice_name = settings.get('voice_name', 'tc_5c547544fcfee90007fed455')
                     speed = settings.get('speed', '1.0')
                     filename = f"tts_emoji_{message.id}.mp3"
 
@@ -388,16 +393,9 @@ async def on_message(message):
                             out.write(audio_content)
 
                         while voice_client.is_playing():
-                            await asyncio.sleep(0.5)
+                            await asyncio.sleep(0.3)
 
-                        def after_playing(error):
-                            if error: print(f"❌ 재생 중 오류 발생: {error}")
-                            asyncio.run_coroutine_threadsafe(remove_file_safely(filename), bot.loop)
-
-                        ffmpeg_executable = "./ffmpeg.exe" if os.path.exists("./ffmpeg.exe") else "ffmpeg"
-                        raw_audio = discord.FFmpegPCMAudio(filename, executable=ffmpeg_executable)
-                        audio_source = discord.PCMVolumeTransformer(raw_audio, volume=0.25)
-                        voice_client.play(audio_source, after=after_playing)
+                        await play_tts(voice_client, filename)
                     except Exception as e:
                         print(f"❌ Typecast TTS 생성 실패: {e}")
             return
@@ -475,7 +473,7 @@ async def on_message(message):
         audio_content = await asyncio.to_thread(
             generate_typecast_tts,
             tts_text,
-            settings.get('voice_name', '60a34b22c0199e46950db8ca'),
+            settings.get('voice_name', 'tc_5c547544fcfee90007fed455'),
             settings.get('speed', '1.0')
         )
         with open(filename, "wb") as out:
@@ -485,15 +483,8 @@ async def on_message(message):
         return
 
     while voice_client.is_playing(): 
-        await asyncio.sleep(0.5)
+        await asyncio.sleep(0.3)
 
-    def after_playing(error):
-        if error: print(f"❌ 재생 중 오류 발생: {error}")
-        asyncio.run_coroutine_threadsafe(remove_file_safely(filename), bot.loop)
-
-    ffmpeg_executable = "./ffmpeg.exe" if os.path.exists("./ffmpeg.exe") else "ffmpeg"
-    raw_audio = discord.FFmpegPCMAudio(filename, executable=ffmpeg_executable)
-    audio_source = discord.PCMVolumeTransformer(raw_audio, volume=0.25)
-    voice_client.play(audio_source, after=after_playing)
+    await play_tts(voice_client, filename)
 
 bot.run(os.getenv("DISCORD_TOKEN"))
