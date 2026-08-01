@@ -1,16 +1,20 @@
-import sys, subprocess, os, site, json, re, asyncio, time, requests, discord
+import sys, subprocess, os, site, json, re, asyncio, time, discord
 from discord import app_commands
 from dotenv import load_dotenv
-from keep_alive import keep_alive
 from typecast import Typecast
+from keep_alive import keep_alive
 
 site.main()
 load_dotenv()
 
 keep_alive()
 
-# --- 환경변수 로드 ---
+# --- 환경변수 로드 및 Typecast 클라이언트 생성 ---
 TTS_API = os.getenv("TTS_API")
+if not TTS_API:
+    print("⚠️ 경고: .env 파일에 TTS_API 키가 설정되지 않았습니다.")
+
+tc = Typecast(api_key=TTS_API)
 
 # --- 채팅 메시지 변환용 딕셔너리 ---
 INITIAL_REPLACEMENTS = {
@@ -33,62 +37,31 @@ INITIAL_REPLACEMENTS = {
     "ㅇㅋ": "오키"
 }
 
-# --- Typecast API 동기 요청 함수 ---
+# --- Typecast SDK 호출 동기 함수 ---
 def generate_typecast_tts(text: str, actor_id: str, speed: str) -> bytes:
     if not TTS_API:
         raise ValueError("TTS_API가 설정되지 않았습니다.")
 
-    url = "https://typecast.ai/api/speak"
-    headers = {
-        "Authorization": f"Bearer {TTS_API}",
-        "Content-Type": "application/json"
-    }
-    
-    payload = {
-        "text": text,
-        "actor_id": actor_id,
-        "xspeed": float(speed),
-        "lang": "auto",
-        "max_wait_time": 60
-    }
+    try:
+        xspeed_val = float(speed)
+    except ValueError:
+        xspeed_val = 1.0
 
-    # 1. 음성 합성 요청
-    response = requests.post(url, json=payload, headers=headers)
-    response.raise_for_status()
-    data = response.json()
-    
-    result = data.get("result", {})
-    
-    # 즉시 speak_url이 반환된 경우
-    audio_url = result.get("speak_url") or result.get("audio_download_url")
-    
-    # 폴링이 필요한 경우
-    if not audio_url:
-        speak_id = result.get("speak_id") or result.get("synth_id")
-        if not speak_id:
-            raise Exception(f"Typecast 응답 오류: {data}")
+    print(f"🎙 [Typecast SDK 요청] Actor ID: {actor_id} | Speed: {xspeed_val} | Text: '{text}'")
 
-        poll_url = f"https://typecast.ai/api/speak/{speak_id}"
-        
-        for _ in range(30):  # 최대 15초 대기
-            poll_res = requests.get(poll_url, headers=headers).json()
-            poll_result = poll_res.get("result", {})
-            status = poll_result.get("status")
-            
-            if status == "done":
-                audio_url = poll_result.get("speak_url") or poll_result.get("audio_download_url")
-                break
-            elif status == "failed":
-                raise Exception("Typecast TTS 생성 실패")
-            
-            time.sleep(0.5)
+    # Typecast 공식 SDK 오디오 생성 호출
+    audio = tc.speak(
+        text=text,
+        actor_id=actor_id,
+        xspeed=xspeed_val,
+        lang="auto"
+    )
 
-    if not audio_url:
-        raise Exception("오디오 URL을 가져오지 못했습니다.")
+    if not audio or not audio.bytes:
+        raise Exception("Typecast SDK로부터 음성 데이터를 받아오지 못했습니다.")
 
-    # 2. 음성 파일 다운로드
-    audio_bytes = requests.get(audio_url).content
-    return audio_bytes
+    print(f"✅ [Typecast SDK 성공] 오디오 변환 완료 ({len(audio.bytes)} bytes)")
+    return audio.bytes
 
 
 # --- 관리자 전용 채널 선택 셀렉트 메뉴 ---
@@ -126,7 +99,6 @@ class VoiceSelectView(discord.ui.Select):
                 value="tc_5c547544fcfee90007fed455", 
                 default=(current_voice == "tc_5c547544fcfee90007fed455")
             ),
-            # 추후 보내주시는 보이스 ID를 이곳에 추가하시면 됩니다.
         ]
         super().__init__(placeholder="목소리 설정", options=options)
         self.bot = bot
@@ -205,19 +177,28 @@ bot = TTSBot()
 async def play_tts(vc, filename):
     """음성 재생 공통 함수"""
     ffmpeg_executable = "./ffmpeg.exe" if os.path.exists("./ffmpeg.exe") else "ffmpeg"
-    raw_audio = discord.FFmpegPCMAudio(
-        filename,
-        executable=ffmpeg_executable,
-        options="-vn"
-    )
-    audio_source = discord.PCMVolumeTransformer(raw_audio, volume=0.8)
     
-    def after_playing(error):
-        if error:
-            print(f"❌ 재생 중 오류 발생: {error}")
-        asyncio.run_coroutine_threadsafe(remove_file_safely(filename), bot.loop)
+    ffmpeg_options = {
+        'options': '-vn',
+        'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5'
+    }
 
-    vc.play(audio_source, after=after_playing)
+    try:
+        raw_audio = discord.FFmpegPCMAudio(
+            filename,
+            executable=ffmpeg_executable,
+            **ffmpeg_options
+        )
+        audio_source = discord.PCMVolumeTransformer(raw_audio, volume=1.0)
+        
+        def after_playing(error):
+            if error:
+                print(f"❌ 재생 중 디스코드 오디오 오류: {error}")
+            asyncio.run_coroutine_threadsafe(remove_file_safely(filename), bot.loop)
+
+        vc.play(audio_source, after=after_playing)
+    except Exception as e:
+        print(f"❌ FFmpeg 재생 예외 발생: {e}")
 
 
 @bot.event
@@ -253,7 +234,7 @@ async def on_voice_state_update(member, before, after):
 
                 await play_tts(vc, filename)
             except Exception as e:
-                print(f"❌ 입장 TTS 생성 실패: {e}")
+                print(f"❌ 입장 TTS 생성 및 재생 실패: {e}")
 
     elif before.channel is not None and after.channel is None:
         if vc and before.channel == vc.channel:
@@ -272,7 +253,7 @@ async def on_voice_state_update(member, before, after):
 
                 await play_tts(vc, filename)
             except Exception as e:
-                print(f"❌ 퇴장 TTS 생성 실패: {e}")
+                print(f"❌ 퇴장 TTS 생성 및 재생 실패: {e}")
 
     if not vc or not vc.is_connected():
         return
@@ -398,7 +379,7 @@ async def on_message(message):
 
                         await play_tts(voice_client, filename)
                     except Exception as e:
-                        print(f"❌ Typecast TTS 생성 실패: {e}")
+                        print(f"❌ Typecast SDK 생성 실패: {e}")
             return
         except Exception as e:
             print(f"❌ 이모지 전송 실패: {e}")
@@ -480,7 +461,7 @@ async def on_message(message):
         with open(filename, "wb") as out:
             out.write(audio_content)
     except Exception as e:
-        print(f"❌ Typecast TTS 생성 실패: {e}")
+        print(f"❌ Typecast SDK 생성 실패: {e}")
         return
 
     while voice_client.is_playing(): 
