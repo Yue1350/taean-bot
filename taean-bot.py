@@ -120,7 +120,6 @@ class VoiceSelectView(discord.ui.Select):
             discord.SelectOption(label="자바바", value="tc_62a89753894c1004cb577d04", default=(current_voice == "tc_62a89753894c1004cb577d04")),
             discord.SelectOption(label="심호문", value="tc_63622aaa4109052e8067e303", default=(current_voice == "tc_63622aaa4109052e8067e303")),
             discord.SelectOption(label="핼런", value="tc_60ee43c93a301a495e8e554e", default=(current_voice == "tc_60ee43c93a301a495e8e554e")),
-            discord.SelectOption(label="나나", value="tc_6076e25ac80469168e3771cf", default=(current_voice == "tc_6076e25ac80469168e3771cf")),
             discord.SelectOption(label="코난", value="tc_660645fb8db3e2c06ff7070b", default=(current_voice == "tc_660645fb8db3e2c06ff7070b")),
             discord.SelectOption(label="김반장", value="tc_63aaebf1cef3e7d6ce6d3628", default=(current_voice == "tc_63aaebf1cef3e7d6ce6d3628")),
             discord.SelectOption(label="학철", value="tc_63a3d9d14b235ddd6541a78e", default=(current_voice == "tc_63a3d9d14b235ddd6541a78e")),
