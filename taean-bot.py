@@ -18,9 +18,6 @@ try:
 except Exception as e:
     print(f"⚠️ Typecast 클라이언트 초기화 경고: {e}")
 
-# 로마자 -> 한글 변환기 객체 생성
-romanizer = Romanizer()
-
 # --- 채팅 메시지 변환용 딕셔너리 ---
 INITIAL_REPLACEMENTS = {
     "ㅎㅇ": "하이",
@@ -56,8 +53,9 @@ def auto_roman_to_korean(text: str) -> str:
         clean_word = re.sub(r'[^a-zA-Z]', '', word)
         if clean_word:
             try:
-                # 로마자 한글 역변환 (예: JEON -> 전, HYUN -> 현)
-                korean_word = romanizer.pronounce(clean_word.lower())
+                # Romanizer 객체 생성 시 변환할 텍스트를 인자로 전달
+                r = Romanizer(clean_word.lower())
+                korean_word = r.pronounce()
                 word = word.replace(clean_word, korean_word)
             except Exception:
                 pass
