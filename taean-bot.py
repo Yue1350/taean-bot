@@ -139,7 +139,46 @@ class VoiceSelectView(discord.ui.Select):
         await interaction.response.send_message(f"✅ TTS 목소리가 `{selected_label}`(으)로 변경되었습니다.", ephemeral=True)
 
 
-# --- TTS 설정 뷰 ---
+# --- 0.5배속 ~ 2.0배속 선택 셀렉트 메뉴 ---
+class TempoSelectView(discord.ui.Select):
+    def __init__(self, bot, guild_id, current_tempo):
+        tempo_options = [
+            ("0.5배속 (매우 느림)", 0.5),
+            ("0.6배속", 0.6),
+            ("0.7배속", 0.7),
+            ("0.8배속", 0.8),
+            ("0.9배속", 0.9),
+            ("1.0배속 (기본)", 1.0),
+            ("1.1배속", 1.1),
+            ("1.2배속", 1.2),
+            ("1.3배속", 1.3),
+            ("1.4배속", 1.4),
+            ("1.5배속", 1.5),
+            ("1.6배속", 1.6),
+            ("1.7배속", 1.7),
+            ("1.8배속", 1.8),
+            ("1.9배속", 1.9),
+            ("2.0배속 (매우 빠름)", 2.0),
+        ]
+        options = [
+            discord.SelectOption(
+                label=label,
+                value=str(val),
+                default=(abs(current_tempo - val) < 0.05)
+            ) for label, val in tempo_options
+        ]
+        super().__init__(placeholder="음성 속도 선택 (0.5x ~ 2.0x)", options=options)
+        self.bot = bot
+        self.guild_id = guild_id
+
+    async def callback(self, interaction: discord.Interaction):
+        selected_tempo = float(self.values[0])
+        settings = self.bot.get_guild_settings(self.guild_id)
+        settings['tempo'] = selected_tempo
+        await interaction.response.send_message(f"✅ TTS 속도가 `{selected_tempo}배속`(으)로 변경되었습니다.", ephemeral=True)
+
+
+# --- TTS 설정 뷰 (채널, 목소리, 속도 통합) ---
 class TTSSettingsView(discord.ui.View):
     def __init__(self, bot, guild_id, is_admin=False):
         super().__init__(timeout=60)
@@ -152,6 +191,7 @@ class TTSSettingsView(discord.ui.View):
             self.add_item(ChannelSelectView(bot, guild_id, settings.get('channel_id')))
 
         self.add_item(VoiceSelectView(bot, guild_id, settings.get('voice_name', 'tc_5c547544fcfee90007fed455')))
+        self.add_item(TempoSelectView(bot, guild_id, settings.get('tempo', 1.0)))
 
 
 class TTSBot(discord.Client):
@@ -320,7 +360,7 @@ async def leave_vc(interaction: discord.Interaction):
     else:
         await interaction.response.send_message("❌ 현재 통화방에 입장해 있지 않습니다.", ephemeral=True)
 
-@bot.tree.command(name="tts설정", description="TTS 목소리 및 전용 채널을 설정합니다.")
+@bot.tree.command(name="tts설정", description="TTS 목소리, 속도 및 전용 채널을 설정합니다.")
 async def config_tts(interaction: discord.Interaction):
     permissions = interaction.channel.permissions_for(interaction.user)
     is_admin = permissions.manage_channels or permissions.administrator
