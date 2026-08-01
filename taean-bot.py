@@ -167,12 +167,12 @@ class TTSBot(discord.Client):
 bot = TTSBot()
 
 async def play_tts(vc, filename):
-    """음성 재생 공통 함수"""
+    """음성 재생 공통 함수 (로컬 파일 재생용 FFmpeg 설정)"""
     ffmpeg_executable = "./ffmpeg.exe" if os.path.exists("./ffmpeg.exe") else "ffmpeg"
     
+    # 로컬 .wav 파일 재생 시 네트워크 재연결 옵션(before_options)을 빼야 정상 동작함
     ffmpeg_options = {
-        'options': '-vn',
-        'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5'
+        'options': '-vn'
     }
 
     try:
