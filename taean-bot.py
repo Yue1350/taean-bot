@@ -85,7 +85,7 @@ class VoiceSelectView(discord.ui.Select):
             discord.SelectOption(label="남성 1", value="ko-KR-Neural2-C", default=(current_voice == "ko-KR-Neural2-C")),
             discord.SelectOption(label="남성 2", value="ko-KR-Neural2-D", default=(current_voice == "ko-KR-Neural2-D")),
         ]
-        super().__init__(placeholder="목소리를 선택해 주세요", options=options)
+        super().__init__(placeholder="목소리 설정", options=options)
         self.bot = bot
         self.guild_id = guild_id
 
@@ -99,8 +99,8 @@ class VoiceSelectView(discord.ui.Select):
 class SpeedSelectView(discord.ui.Select):
     def __init__(self, bot, guild_id, current_speed):
         speeds = [
-            ("0.25", "0.25"), ("0.5", "0.5"), ("0.75", "0.75"), ("1", "1.0"),
-            ("1.25", "1.25"), ("1.5", "1.5"), ("1.75", "1.75"), ("2", "2.0")
+            ("0.25 배속", "0.25"), ("0.5 배속", "0.5"), ("0.75 배속", "0.75"), ("1 배속", "1.0"),
+            ("1.25 배속", "1.25"), ("1.5 배속", "1.5"), ("1.75 배속", "1.75"), ("2 배속", "2.0")
         ]
         options = [
             discord.SelectOption(label=label, value=val, default=(current_speed == val))
