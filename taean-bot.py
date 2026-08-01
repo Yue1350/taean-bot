@@ -1,5 +1,4 @@
-import sys, subprocess, os, site, json, re, asyncio, base64
-import discord
+import sys, subprocess, os, site, json, re, asyncio, base64, discord
 from discord import app_commands
 from dotenv import load_dotenv
 from googleapiclient.discovery import build
@@ -57,7 +56,7 @@ class ChannelSelectView(discord.ui.ChannelSelect):
     def __init__(self, bot, guild_id, current_channel_id=None):
         super().__init__(
             channel_types=[discord.ChannelType.text],
-            placeholder="📢 TTS 읽기 채널을 선택해 주세요"
+            placeholder="TTS 채널을 선택해 주세요."
         )
         self.bot = bot
         self.guild_id = guild_id
@@ -75,7 +74,7 @@ class ChannelSelectView(discord.ui.ChannelSelect):
         settings = self.bot.get_guild_settings(self.guild_id)
         settings['channel_id'] = selected_channel.id
         settings['temp_channel_id'] = None
-        await interaction.response.send_message(f"✅ {selected_channel.mention} 채널이 TTS 읽기 채널로 설정되었습니다.", ephemeral=True)
+        await interaction.response.send_message(f"✅ {selected_channel.mention} 채널이 TTS 채널로 설정되었습니다.", ephemeral=True)
 
 # --- 목소리 선택 셀렉트 메뉴 ---
 class VoiceSelectView(discord.ui.Select):
@@ -86,7 +85,7 @@ class VoiceSelectView(discord.ui.Select):
             discord.SelectOption(label="남성 1", value="ko-KR-Neural2-C", default=(current_voice == "ko-KR-Neural2-C")),
             discord.SelectOption(label="남성 2", value="ko-KR-Neural2-D", default=(current_voice == "ko-KR-Neural2-D")),
         ]
-        super().__init__(placeholder="🎤 목소리를 선택해 주세요", options=options)
+        super().__init__(placeholder="목소리를 선택해 주세요", options=options)
         self.bot = bot
         self.guild_id = guild_id
 
@@ -107,7 +106,7 @@ class SpeedSelectView(discord.ui.Select):
             discord.SelectOption(label=label, value=val, default=(current_speed == val))
             for label, val in speeds
         ]
-        super().__init__(placeholder="⚡ 재생 속도를 선택해 주세요", options=options)
+        super().__init__(placeholder="재생 속도를 선택해 주세요", options=options)
         self.bot = bot
         self.guild_id = guild_id
 
