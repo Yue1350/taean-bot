@@ -231,7 +231,7 @@ async def on_voice_state_update(member, before, after):
     if len(human_members) == 0:
         await vc.disconnect()
         settings['temp_channel_id'] = None
-        print(f"👋 {member.guild.name} 서버 음성 채널에 아무도 없어서 자동 퇴장했습니다.")
+        print(f"⚠ {member.guild.name} 서버 음성 채널에 아무도 없어서 자동 퇴장했습니다.")
 
 async def remove_file_safely(filepath):
     await asyncio.sleep(1)
@@ -262,10 +262,10 @@ def generate_google_tts(client, text, voice_name):
 
 # --- 명령어 영역 ---
 
-@bot.tree.command(name="입장", description="TTS 봇을 음성 채널에 수동으로 입장시킵니다.")
+@bot.tree.command(name="입장", description="TTS 봇을 음성 채널에 입장시킵니다.")
 async def join_vc(interaction: discord.Interaction):
     if not interaction.user.voice or not interaction.user.voice.channel:
-        await interaction.response.send_message("❌ 먼저 통화방(음성 채널)에 들어가 계셔야 합니다.", ephemeral=True)
+        await interaction.response.send_message("❌ 먼저 음성 채널에 입장해야 합니다.", ephemeral=True)
         return
 
     voice_channel = interaction.user.voice.channel
@@ -289,17 +289,17 @@ async def leave_vc(interaction: discord.Interaction):
         await vc.disconnect()
         settings = bot.get_guild_settings(interaction.guild_id)
         settings['temp_channel_id'] = None
-        await interaction.response.send_message("👋 음성 채널에서 퇴장하였습니다.", ephemeral=True)
+        await interaction.response.send_message("✔ 음성 채널에서 퇴장하였습니다.", ephemeral=True)
     else:
         await interaction.response.send_message("❌ 현재 통화방에 들어가 있지 않습니다.", ephemeral=True)
 
-@bot.tree.command(name="tts설정", description="TTS 목소리, 속도 및 전용 읽기 채널을 설정합니다.")
+@bot.tree.command(name="tts설정", description="TTS 목소리, 속도 및 전용 채널을 설정합니다.")
 async def config_tts(interaction: discord.Interaction):
     permissions = interaction.channel.permissions_for(interaction.user)
     is_admin = permissions.manage_channels or permissions.administrator
 
     view = TTSSettingsView(bot, interaction.guild_id, is_admin=is_admin)
-    await interaction.response.send_message("⚙️ 변경할 옵션을 아래 목록에서 선택해 주세요.", view=view, ephemeral=True)
+    await interaction.response.send_message("", view=view, ephemeral=True)
 
 # --- 메시지 감지 영역 ---
 
@@ -366,7 +366,7 @@ async def on_message(message):
                         print(f"❌ 구글 TTS 생성 실패: {e}")
             return
         except Exception as e:
-            print(f"❌ 이모지 전송 실패: {e}")
+            print(f"❌     이모지 전송 실패: {e}")
 
     if message.channel.id != target_channel_id: 
         return
