@@ -2,6 +2,7 @@ import sys, subprocess, os, site, json, re, asyncio, time, requests, discord
 from discord import app_commands
 from dotenv import load_dotenv
 from keep_alive import keep_alive
+from typecast import Typecast
 
 site.main()
 load_dotenv()
