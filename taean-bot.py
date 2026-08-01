@@ -2,7 +2,7 @@ import sys, subprocess, os, site, json, re, asyncio, time, discord
 from discord import app_commands
 from dotenv import load_dotenv
 from typecast import Typecast
-from typecast.models import TTSRequest
+from typecast.models import TTSRequest, Output
 from keep_alive import keep_alive
 from korean_romanizer.romanizer import Romanizer
 
@@ -12,7 +12,6 @@ load_dotenv()
 keep_alive()
 
 # --- 1. Typecast 클라이언트 엄격한 초기화 ---
-# try/except를 제거하여 TYPECAST_API_KEY가 없거나 오류 발생 시 실행 시점에 즉시 실패 로그를 출력합니다.
 print("🔑 Typecast 클라이언트 초기화를 시도합니다...")
 client = Typecast()
 print("✅ Typecast 클라이언트 초기화 성공!")
@@ -57,15 +56,16 @@ def auto_roman_to_korean(text: str) -> str:
 
     return " ".join(processed_words)
 
-# --- Typecast SDK 호출 함수 (상세 에러 로깅 적용) ---
-def generate_typecast_tts(text: str, voice_id: str) -> bytes:
-    print(f"🎙 [Typecast SDK 요청] Voice ID: {voice_id} | Text: '{text}'")
+# --- Typecast SDK 호출 함수 ---
+def generate_typecast_tts(text: str, voice_id: str, tempo: float = 1.0) -> bytes:
+    print(f"🎙 [Typecast SDK 요청] Voice ID: {voice_id} | Tempo: {tempo} | Text: '{text}'")
 
     try:
         response = client.text_to_speech(TTSRequest(
             text=text,
             model="ssfm-v30",
-            voice_id=voice_id
+            voice_id=voice_id,
+            output=Output(audio_tempo=tempo)
         ))
 
         if not response or not response.audio_data:
@@ -75,7 +75,6 @@ def generate_typecast_tts(text: str, voice_id: str) -> bytes:
         return response.audio_data
 
     except Exception as e:
-        # SDK 내부에서 발생한 진짜 에러 원인을 콘솔에 상세히 출력
         print(f"❌ [Typecast SDK API 오류 발생]: {e}")
         raise e
 
@@ -110,13 +109,26 @@ class ChannelSelectView(discord.ui.ChannelSelect):
 class VoiceSelectView(discord.ui.Select):
     def __init__(self, bot, guild_id, current_voice):
         options = [
-            discord.SelectOption(
-                label="남성 - 찬구", 
-                value="tc_5c547544fcfee90007fed455", 
-                default=(current_voice == "tc_5c547544fcfee90007fed455")
-            ),
+            discord.SelectOption(label="찬구", value="tc_5c547544fcfee90007fed455", default=(current_voice == "tc_5c547544fcfee90007fed455")),
+            discord.SelectOption(label="주원", value="tc_5c547545fcfee90007fed459", default=(current_voice == "tc_5c547545fcfee90007fed459")),
+            discord.SelectOption(label="우주", value="tc_5f8e95eae146f10007b85f45", default=(current_voice == "tc_5f8e95eae146f10007b85f45")),
+            discord.SelectOption(label="용식", value="tc_5feb2085cca1a479e73bac37", default=(current_voice == "tc_5feb2085cca1a479e73bac37")),
+            discord.SelectOption(label="채린", value="tc_5ffda44bcba8f6d3d46fc41f", default=(current_voice == "tc_5ffda44bcba8f6d3d46fc41f")),
+            discord.SelectOption(label="미스터 변사", value="tc_603fa172a669dfd23f450abd", default=(current_voice == "tc_603fa172a669dfd23f450abd")),
+            discord.SelectOption(label="창수", value="tc_6059dad0b83880769a50502f", default=(current_voice == "tc_6059dad0b83880769a50502f")),
+            discord.SelectOption(label="일호", value="tc_61945d9c2c11c2c9fd934340", default=(current_voice == "tc_61945d9c2c11c2c9fd934340")),
+            discord.SelectOption(label="자바바", value="tc_62a89753894c1004cb577d04", default=(current_voice == "tc_62a89753894c1004cb577d04")),
+            discord.SelectOption(label="심호문", value="tc_63622aaa4109052e8067e303", default=(current_voice == "tc_63622aaa4109052e8067e303")),
+            discord.SelectOption(label="핼런", value="tc_60ee43c93a301a495e8e554e", default=(current_voice == "tc_60ee43c93a301a495e8e554e")),
+            discord.SelectOption(label="나나", value="tc_6076e25ac80469168e3771cf", default=(current_voice == "tc_6076e25ac80469168e3771cf")),
+            discord.SelectOption(label="코난", value="tc_660645fb8db3e2c06ff7070b", default=(current_voice == "tc_660645fb8db3e2c06ff7070b")),
+            discord.SelectOption(label="김반장", value="tc_63aaebf1cef3e7d6ce6d3628", default=(current_voice == "tc_63aaebf1cef3e7d6ce6d3628")),
+            discord.SelectOption(label="학철", value="tc_63a3d9d14b235ddd6541a78e", default=(current_voice == "tc_63a3d9d14b235ddd6541a78e")),
+            discord.SelectOption(label="한유격 교관", value="tc_5faa3acfac283a00075d0d2e", default=(current_voice == "tc_5faa3acfac283a00075d0d2e")),
+            discord.SelectOption(label="덕춘", value="tc_5c3c52c95827e00008dd7f34", default=(current_voice == "tc_5c3c52c95827e00008dd7f34")),
+            discord.SelectOption(label="키보", value="tc_6100287f568d6198a78bac31", default=(current_voice == "tc_6100287f568d6198a78bac31")),
         ]
-        super().__init__(placeholder="목소리 설정", options=options)
+        super().__init__(placeholder="목소리 선택", options=options)
         self.bot = bot
         self.guild_id = guild_id
 
@@ -155,6 +167,7 @@ class TTSBot(discord.Client):
         if guild_id not in self.guild_settings:
             self.guild_settings[guild_id] = {
                 'voice_name': 'tc_5c547544fcfee90007fed455',
+                'tempo': 1.0,
                 'read_non_vc': False,
                 'channel_id': None,
                 'temp_channel_id': None
@@ -170,7 +183,6 @@ async def play_tts(vc, filename):
     """음성 재생 공통 함수 (로컬 파일 재생용 FFmpeg 설정)"""
     ffmpeg_executable = "./ffmpeg.exe" if os.path.exists("./ffmpeg.exe") else "ffmpeg"
     
-    # 로컬 .wav 파일 재생 시 네트워크 재연결 옵션(before_options)을 빼야 정상 동작함
     ffmpeg_options = {
         'options': '-vn'
     }
@@ -210,6 +222,7 @@ async def on_voice_state_update(member, before, after):
     vc = member.guild.voice_client
 
     display_name_korean = auto_roman_to_korean(member.display_name)
+    tempo = settings.get('tempo', 1.0)
 
     if before.channel is None and after.channel is not None:
         if vc and after.channel == vc.channel:
@@ -218,7 +231,7 @@ async def on_voice_state_update(member, before, after):
             filename = f"tts_join_{member.id}_{int(time.time())}.wav"
 
             try:
-                audio_content = await asyncio.to_thread(generate_typecast_tts, tts_text, voice_name)
+                audio_content = await asyncio.to_thread(generate_typecast_tts, tts_text, voice_name, tempo)
                 with open(filename, "wb") as out:
                     out.write(audio_content)
 
@@ -236,7 +249,7 @@ async def on_voice_state_update(member, before, after):
             filename = f"tts_leave_{member.id}_{int(time.time())}.wav"
 
             try:
-                audio_content = await asyncio.to_thread(generate_typecast_tts, tts_text, voice_name)
+                audio_content = await asyncio.to_thread(generate_typecast_tts, tts_text, voice_name, tempo)
                 with open(filename, "wb") as out:
                     out.write(audio_content)
 
@@ -327,6 +340,7 @@ async def on_message(message):
     target_channel_id = settings.get('channel_id') or settings.get('temp_channel_id')
 
     author_name = auto_roman_to_korean(message.author.display_name)
+    tempo = settings.get('tempo', 1.0)
 
     if message.webhook_id is not None:
         if message.channel.id == target_channel_id:
@@ -363,7 +377,7 @@ async def on_message(message):
                     filename = f"tts_emoji_{message.id}.wav"
 
                     try:
-                        audio_content = await asyncio.to_thread(generate_typecast_tts, tts_text, voice_name)
+                        audio_content = await asyncio.to_thread(generate_typecast_tts, tts_text, voice_name, tempo)
                         with open(filename, "wb") as out:
                             out.write(audio_content)
 
@@ -448,7 +462,8 @@ async def on_message(message):
         audio_content = await asyncio.to_thread(
             generate_typecast_tts,
             tts_text,
-            settings.get('voice_name', 'tc_5c547544fcfee90007fed455')
+            settings.get('voice_name', 'tc_5c547544fcfee90007fed455'),
+            tempo
         )
         with open(filename, "wb") as out:
             out.write(audio_content)
