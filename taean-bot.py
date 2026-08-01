@@ -5,6 +5,7 @@ from typecast import Typecast
 from typecast.models import TTSRequest, Output, PresetPrompt
 from keep_alive import keep_alive
 from korean_romanizer.romanizer import Romanizer
+from num2words import num2words
 
 site.main()
 load_dotenv()
@@ -44,6 +45,17 @@ def auto_roman_to_korean(text: str) -> str:
         processed_words.append(word)
 
     return " ".join(processed_words)
+
+# --- 숫자를 한글 독음으로 자동 변환해주는 함수 ---
+def convert_numbers_to_korean(text: str) -> str:
+    def replace_num(match):
+        num_str = match.group()
+        try:
+            return num2words(int(num_str), lang='ko')
+        except Exception:
+            return num_str
+
+    return re.sub(r'\d+', replace_num, text)
 
 # --- Typecast SDK 호출 함수 ---
 def generate_typecast_tts(text: str, settings: dict) -> bytes:
@@ -263,7 +275,7 @@ async def play_tts(vc, filename):
     try:
         raw_audio = discord.FFmpegPCMAudio(filename, executable=ffmpeg_executable, **ffmpeg_options)
         audio_source = discord.PCMVolumeTransformer(raw_audio, volume=1.0)
-        
+
         def after_playing(error):
             if error:
                 print(f"❌ 재생 중 디스코드 오디오 오류: {error}")
@@ -289,7 +301,7 @@ async def on_voice_state_update(member, before, after):
 
     settings = bot.get_guild_settings(member.guild.id)
     vc = member.guild.voice_client
-    display_name_korean = auto_roman_to_korean(member.display_name)
+    display_name_korean = convert_numbers_to_korean(auto_roman_to_korean(member.display_name))
 
     if before.channel is None and after.channel is not None:
         if vc and after.channel == vc.channel:
@@ -388,7 +400,7 @@ async def leave_vc(interaction: discord.Interaction):
 # --- 채널 생성 / 지정 / 해제 통합 명령어 ---
 @bot.tree.command(name="tts채널", description="TTS 전용 채널을 생성, 지정 또는 해제합니다.")
 @app_commands.rename(action="작업")
-@app_commands.describe(action="생성/지정/해제")
+@app_commands.describe(action="수행할 작업을 선택하세요 (생성/지정/해제)")
 @app_commands.choices(action=[
     app_commands.Choice(name="생성", value="create"),
     app_commands.Choice(name="지정", value="set"),
@@ -405,7 +417,6 @@ async def set_tts_channel(interaction: discord.Interaction, action: str):
     if action == "create":
         await interaction.response.defer(ephemeral=True)
         try:
-            # 특수 폰트 채널명 '𝗧𝗧𝗦' 생성
             new_channel = await interaction.guild.create_text_channel(
                 name="𝗧𝗧𝗦",
                 reason="TTS 전용 채널 자동 생성"
@@ -436,10 +447,10 @@ async def set_tts_channel(interaction: discord.Interaction, action: str):
 
     elif action == "clear":
         await interaction.response.defer(ephemeral=True)
-        
+
         settings['channel_id'] = None
         settings['original_channel_name'] = None
-        
+
         await interaction.followup.send("✅ TTS 채널 설정이 해제되었습니다.", ephemeral=True)
 
 @bot.tree.command(name="tts설정", description="TTS 목소리, 속도, 피치, 감정 및 강도를 설정합니다.")
@@ -458,7 +469,7 @@ async def on_message(message):
     settings = bot.get_guild_settings(message.guild.id)
     target_channel_id = settings.get('channel_id') or settings.get('temp_channel_id')
 
-    author_name = auto_roman_to_korean(message.author.display_name)
+    author_name = convert_numbers_to_korean(auto_roman_to_korean(message.author.display_name))
 
     if message.webhook_id is not None:
         if message.channel.id == target_channel_id:
@@ -526,11 +537,12 @@ async def on_message(message):
 
     raw_text = message.content.strip()
     raw_text = auto_roman_to_korean(raw_text)
+    raw_text = convert_numbers_to_korean(raw_text)
 
     def replace_user_mention(match):
         user_id = int(match.group(1))
         member = message.guild.get_member(user_id)
-        return auto_roman_to_korean(member.display_name) if member else "알 수 없는 유저"
+        return convert_numbers_to_korean(auto_roman_to_korean(member.display_name)) if member else "알 수 없는 유저"
 
     raw_text = re.sub(r"<@!?(\d+)>", replace_user_mention, raw_text)
 
