@@ -35,7 +35,7 @@ INITIAL_REPLACEMENTS = {
 # --- Typecast API 동기 요청 함수 (asyncio.to_thread로 실행) ---
 def generate_typecast_tts(text: str, actor_id: str, speed: str) -> bytes:
     if not TTS_API:
-        raise ValueError("TTS_API가 설정되지 않았어!")
+        raise ValueError("TTS_API가 설정되지 않았습니다.")
 
     url = "https://typecast.ai/api/v1/synth"
     headers = {
@@ -80,7 +80,7 @@ class ChannelSelectView(discord.ui.ChannelSelect):
     def __init__(self, bot, guild_id, current_channel_id=None):
         super().__init__(
             channel_types=[discord.ChannelType.text],
-            placeholder="TTS 채널을 선택해 줘."
+            placeholder="TTS 채널을 선택해 주세요."
         )
         self.bot = bot
         self.guild_id = guild_id
@@ -98,17 +98,33 @@ class ChannelSelectView(discord.ui.ChannelSelect):
         settings = self.bot.get_guild_settings(self.guild_id)
         settings['channel_id'] = selected_channel.id
         settings['temp_channel_id'] = None
-        await interaction.response.send_message(f"✅ {selected_channel.mention} 채널이 TTS 채널로 설정되었어!", ephemeral=True)
+        await interaction.response.send_message(f"✅ {selected_channel.mention} 채널이 TTS 채널로 설정되었습니다.", ephemeral=True)
 
 
 # --- 목소리 선택 셀렉트 메뉴 (Typecast 배우 ID 적용) ---
 class VoiceSelectView(discord.ui.Select):
     def __init__(self, bot, guild_id, current_voice):
         options = [
-            discord.SelectOption(label="여성 1 (하은)", value="60a34b22c0199e46950db8ca", default=(current_voice == "60a34b22c0199e46950db8ca")),
-            discord.SelectOption(label="여성 2 (서연)", value="60cb0958a36c5d1cfd4ff4bf", default=(current_voice == "60cb0958a36c5d1cfd4ff4bf")),
-            discord.SelectOption(label="남성 1 (찬우)", value="60f15c13b2e59174dfd924dd", default=(current_voice == "60f15c13b2e59174dfd924dd")),
-            discord.SelectOption(label="남성 2 (민호)", value="6135ca1029c1d3c0b05b3ff7", default=(current_voice == "6135ca1029c1d3c0b05b3ff7")),
+            # 여성
+            discord.SelectOption(label="여성 - 하은 (밝은 나레이션)", value="60a34b22c0199e46950db8ca", default=(current_voice == "60a34b22c0199e46950db8ca")),
+            discord.SelectOption(label="여성 - 서연 (차분한 대화)", value="60cb0958a36c5d1cfd4ff4bf", default=(current_voice == "60cb0958a36c5d1cfd4ff4bf")),
+            discord.SelectOption(label="여성 - 신애 (뉴스/아나운서)", value="5e786b86d9a184131df33db9", default=(current_voice == "5e786b86d9a184131df33db9")),
+            discord.SelectOption(label="여성 - 수진 (친근한 라디오)", value="5ea78d8a5717ad2eb086df1e", default=(current_voice == "5ea78d8a5717ad2eb086df1e")),
+            
+            # 남성
+            discord.SelectOption(label="남성 - 찬구", value="tc_5c547544fcfee90007fed455", default=(current_voice == "tc_5c547544fcfee90007fed455")),
+            discord.SelectOption(label="남성 - 찬우 (단정한 나레이션)", value="60f15c13b2e59174dfd924dd", default=(current_voice == "60f15c13b2e59174dfd924dd")),
+            discord.SelectOption(label="남성 - 민호 (신뢰감 있는 중저음)", value="6135ca1029c1d3c0b05b3ff7", default=(current_voice == "6135ca1029c1d3c0b05b3ff7")),
+            discord.SelectOption(label="남성 - 도현 (깔끔한 오디오북)", value="5f17d7b00344d564cecf1807", default=(current_voice == "5f17d7b00344d564cecf1807")),
+            discord.SelectOption(label="남성 - 진호 (다큐멘터리)", value="5ed703c393bcff6b14777d01", default=(current_voice == "5ed703c393bcff6b14777d01")),
+            
+            # 어린이 / 캐릭터
+            discord.SelectOption(label="어린이 - 뚜루 (귀여운 여아)", value="5eb10b9cd1d37b12d5cdfa85", default=(current_voice == "5eb10b9cd1d37b12d5cdfa85")),
+            discord.SelectOption(label="어린이 - 재호 (장난기 있는 남아)", value="5f98e6c7ea6bf46c3dd24ee6", default=(current_voice == "5f98e6c7ea6bf46c3dd24ee6")),
+            
+            # 노인
+            discord.SelectOption(label="할머니 - 덕자 (따뜻한 이야기)", value="5f866b1d4c207a6be3db4b8d", default=(current_voice == "5f866b1d4c207a6be3db4b8d")),
+            discord.SelectOption(label="할아버지 - 영식 (인자한 할아버지)", value="5f3a0fe68a88147743d2cbe2", default=(current_voice == "5f3a0fe68a88147743d2cbe2")),
         ]
         super().__init__(placeholder="목소리 설정", options=options)
         self.bot = bot
@@ -118,7 +134,7 @@ class VoiceSelectView(discord.ui.Select):
         settings = self.bot.get_guild_settings(self.guild_id)
         settings['voice_name'] = self.values[0]
         selected_label = next((opt.label for opt in self.options if opt.value == self.values[0]), self.values[0])
-        await interaction.response.send_message(f"✅ TTS 목소리가 `{selected_label}`(으)로 변경되었어!", ephemeral=True)
+        await interaction.response.send_message(f"✅ TTS 목소리가 `{selected_label}`(으)로 변경되었습니다.", ephemeral=True)
 
 
 # --- 속도 선택 셀렉트 메뉴 ---
@@ -132,7 +148,7 @@ class SpeedSelectView(discord.ui.Select):
             discord.SelectOption(label=label, value=val, default=(current_speed == val))
             for label, val in speeds
         ]
-        super().__init__(placeholder="재생 속도를 선택해 줘", options=options)
+        super().__init__(placeholder="재생 속도를 선택해 주세요.", options=options)
         self.bot = bot
         self.guild_id = guild_id
 
@@ -140,7 +156,7 @@ class SpeedSelectView(discord.ui.Select):
         settings = self.bot.get_guild_settings(self.guild_id)
         settings['speed'] = self.values[0]
         selected_label = next((opt.label for opt in self.options if opt.value == self.values[0]), self.values[0])
-        await interaction.response.send_message(f"✅ TTS 속도가 `{selected_label}`(으)로 변경되었어!", ephemeral=True)
+        await interaction.response.send_message(f"✅ TTS 속도가 `{selected_label}`(으)로 변경되었습니다.", ephemeral=True)
 
 
 # --- TTS 설정 뷰 ---
@@ -259,7 +275,7 @@ async def on_voice_state_update(member, before, after):
     if len(human_members) == 0:
         await vc.disconnect()
         settings['temp_channel_id'] = None
-        print(f"⚠ {member.guild.name} 서버 음성 채널에 아무도 없어서 자동 퇴장했어.")
+        print(f"⚠ {member.guild.name} 서버 음성 채널에 아무도 없어서 자동 퇴장했습니다.")
 
 async def remove_file_safely(filepath):
     await asyncio.sleep(1)
@@ -284,7 +300,7 @@ async def delete_message_after_delay(message, delay=10):
 @bot.tree.command(name="입장", description="TTS 봇을 음성 채널에 입장시킵니다.")
 async def join_vc(interaction: discord.Interaction):
     if not interaction.user.voice or not interaction.user.voice.channel:
-        await interaction.response.send_message("❌ 먼저 음성 채널에 입장해야 해!", ephemeral=True)
+        await interaction.response.send_message("❌ 먼저 음성 채널에 입장해야 합니다.", ephemeral=True)
         return
 
     voice_channel = interaction.user.voice.channel
@@ -299,7 +315,7 @@ async def join_vc(interaction: discord.Interaction):
     if not settings.get('channel_id'):
         settings['temp_channel_id'] = interaction.channel_id
 
-    await interaction.response.send_message(f"🔊 {voice_channel.mention} 채널이 설정되었어!", ephemeral=True)
+    await interaction.response.send_message(f"🔊 {voice_channel.mention} 채널이 설정되었습니다.", ephemeral=True)
 
 @bot.tree.command(name="퇴장", description="봇을 음성 채널에서 내보냅니다.")
 async def leave_vc(interaction: discord.Interaction):
@@ -308,9 +324,9 @@ async def leave_vc(interaction: discord.Interaction):
         await vc.disconnect()
         settings = bot.get_guild_settings(interaction.guild_id)
         settings['temp_channel_id'] = None
-        await interaction.response.send_message("✔ 음성 채널에서 퇴장하였어!", ephemeral=True)
+        await interaction.response.send_message("✔ 음성 채널에서 퇴장하였습니다.", ephemeral=True)
     else:
-        await interaction.response.send_message("❌ 현재 통화방에 들어가 있지 않아.", ephemeral=True)
+        await interaction.response.send_message("❌ 현재 통화방에 입장해 있지 않습니다.", ephemeral=True)
 
 @bot.tree.command(name="tts설정", description="TTS 목소리, 속도 및 전용 채널을 설정합니다.")
 async def config_tts(interaction: discord.Interaction):
