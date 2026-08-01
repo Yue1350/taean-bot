@@ -8,3 +8,4 @@ flask
 fire
 typecast-python
 korean-romanizer
+num2words
