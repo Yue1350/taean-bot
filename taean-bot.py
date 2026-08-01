@@ -2,7 +2,7 @@ import sys, subprocess, os, site, json, re, asyncio, time, discord
 from discord import app_commands
 from dotenv import load_dotenv
 from typecast import Typecast
-from typecast.models import TTSRequest, Output
+from typecast.models import TTSRequest, Output, PresetPrompt
 from keep_alive import keep_alive
 from korean_romanizer.romanizer import Romanizer
 
@@ -18,23 +18,12 @@ print("✅ Typecast 클라이언트 초기화 성공!")
 
 # --- 채팅 메시지 변환용 딕셔너리 ---
 INITIAL_REPLACEMENTS = {
-    "ㅎㅇ": "하이",
-    "ㅂㅇ": "바이",
-    "ㅂㅂ": "바바",
-    "ㄳ": "감사",
-    "ㄱㅅ": "감사",
-    "ㄷㄷ": "덜덜",
-    "ㅇㅈ": "인정",
-    "ㄹㅇ": "레알",
-    "ㅅㄱ": "수고",
-    "?": "응?",
-    "ㅇ": "응",
-    "ㅇㅇ": "응응",
-    "ㅅㅅ": "섹스",
-    "ㅎㅎ": "히히",
-    "ㄴㄴ": "노노",
-    "ㅈㄹ": "지랄",
-    "ㅇㅋ": "오키"
+    "ㅎㅇ": "하이", "ㅂㅇ": "바이", "ㅂㅂ": "바바",
+    "ㄳ": "감사", "ㄱㅅ": "감사", "ㄷㄷ": "덜덜",
+    "ㅇㅈ": "인정", "ㄹㅇ": "레알", "ㅅㄱ": "수고",
+    "?": "응?", "ㅇ": "응", "ㅇㅇ": "응응",
+    "ㅅㅅ": "섹스", "ㅎㅎ": "히히", "ㄴㄴ": "노노",
+    "ㅈㄹ": "지랄", "ㅇㅋ": "오키"
 }
 
 # --- 영문/언더바 닉네임 및 단어 한글 자동 변환 함수 ---
@@ -57,15 +46,29 @@ def auto_roman_to_korean(text: str) -> str:
     return " ".join(processed_words)
 
 # --- Typecast SDK 호출 함수 ---
-def generate_typecast_tts(text: str, voice_id: str, tempo: float = 1.0) -> bytes:
-    print(f"🎙 [Typecast SDK 요청] Voice ID: {voice_id} | Tempo: {tempo} | Text: '{text}'")
+def generate_typecast_tts(text: str, settings: dict) -> bytes:
+    voice_id = settings.get('voice_name', 'tc_5c547544fcfee90007fed455')
+    tempo = settings.get('tempo', 1.0)
+    pitch = settings.get('pitch', 0)
+    emotion_preset = settings.get('emotion_preset', 'normal')
+    emotion_intensity = settings.get('emotion_intensity', 1.0)
+
+    print(f"🎙 [Typecast SDK] Voice: {voice_id} | Tempo: {tempo} | Pitch: {pitch} | Emotion: {emotion_preset}({emotion_intensity}) | Text: '{text}'")
 
     try:
         response = client.text_to_speech(TTSRequest(
             text=text,
             model="ssfm-v30",
             voice_id=voice_id,
-            output=Output(audio_tempo=tempo)
+            prompt=PresetPrompt(
+                emotion_type="preset",
+                emotion_preset=emotion_preset,
+                emotion_intensity=emotion_intensity
+            ),
+            output=Output(
+                audio_tempo=tempo,
+                audio_pitch=pitch
+            )
         ))
 
         if not response or not response.audio_data:
@@ -77,32 +80,6 @@ def generate_typecast_tts(text: str, voice_id: str, tempo: float = 1.0) -> bytes
     except Exception as e:
         print(f"❌ [Typecast SDK API 오류 발생]: {e}")
         raise e
-
-
-# --- 관리자 전용 채널 선택 셀렉트 메뉴 ---
-class ChannelSelectView(discord.ui.ChannelSelect):
-    def __init__(self, bot, guild_id, current_channel_id=None):
-        super().__init__(
-            channel_types=[discord.ChannelType.text],
-            placeholder="TTS 채널을 선택해 주세요."
-        )
-        self.bot = bot
-        self.guild_id = guild_id
-
-        if current_channel_id:
-            try:
-                self.default_values.append(
-                    discord.SelectDefaultValue(id=current_channel_id, type=discord.SelectDefaultValueType.channel)
-                )
-            except (AttributeError, TypeError):
-                pass
-
-    async def callback(self, interaction: discord.Interaction):
-        selected_channel = self.values[0]
-        settings = self.bot.get_guild_settings(self.guild_id)
-        settings['channel_id'] = selected_channel.id
-        settings['temp_channel_id'] = None
-        await interaction.response.send_message(f"✅ {selected_channel.mention} 채널이 TTS 채널로 설정되었습니다.", ephemeral=True)
 
 
 # --- 목소리 선택 셀렉트 메뉴 ---
@@ -138,33 +115,16 @@ class VoiceSelectView(discord.ui.Select):
         await interaction.response.send_message(f"✅ TTS 목소리가 `{selected_label}`(으)로 변경되었습니다.", ephemeral=True)
 
 
-# --- 0.5배속 ~ 2.0배속 선택 셀렉트 메뉴 ---
+# --- 음성 속도 선택 셀렉트 메뉴 ---
 class TempoSelectView(discord.ui.Select):
     def __init__(self, bot, guild_id, current_tempo):
         tempo_options = [
-            ("0.5배속 (매우 느림)", 0.5),
-            ("0.6배속", 0.6),
-            ("0.7배속", 0.7),
-            ("0.8배속", 0.8),
-            ("0.9배속", 0.9),
-            ("1.0배속 (기본)", 1.0),
-            ("1.1배속", 1.1),
-            ("1.2배속", 1.2),
-            ("1.3배속", 1.3),
-            ("1.4배속", 1.4),
-            ("1.5배속", 1.5),
-            ("1.6배속", 1.6),
-            ("1.7배속", 1.7),
-            ("1.8배속", 1.8),
-            ("1.9배속", 1.9),
-            ("2.0배속 (매우 빠름)", 2.0),
+            ("0.5배속 (매우 느림)", 0.5), ("0.8배속", 0.8), ("1.0배속 (기본)", 1.0),
+            ("1.2배속", 1.2), ("1.5배속", 1.5), ("1.8배속", 1.8), ("2.0배속 (매우 빠름)", 2.0)
         ]
         options = [
-            discord.SelectOption(
-                label=label,
-                value=str(val),
-                default=(abs(current_tempo - val) < 0.05)
-            ) for label, val in tempo_options
+            discord.SelectOption(label=label, value=str(val), default=(abs(current_tempo - val) < 0.05))
+            for label, val in tempo_options
         ]
         super().__init__(placeholder="음성 속도 선택 (0.5x ~ 2.0x)", options=options)
         self.bot = bot
@@ -177,20 +137,94 @@ class TempoSelectView(discord.ui.Select):
         await interaction.response.send_message(f"✅ TTS 속도가 `{selected_tempo}배속`(으)로 변경되었습니다.", ephemeral=True)
 
 
-# --- TTS 설정 뷰 (채널, 목소리, 속도 통합) ---
+# --- 음성 피치(Pitch) 선택 셀렉트 메뉴 ---
+class PitchSelectView(discord.ui.Select):
+    def __init__(self, bot, guild_id, current_pitch):
+        pitch_options = [
+            ("-6 반음 (낮음)", -6), ("-3 반음", -3), ("0 반음 (기본)", 0),
+            ("+3 반음", 3), ("+6 반음 (높음)", 6)
+        ]
+        options = [
+            discord.SelectOption(label=label, value=str(val), default=(current_pitch == val))
+            for label, val in pitch_options
+        ]
+        super().__init__(placeholder="음성 피치(Pitch) 선택 (-12 ~ +12)", options=options)
+        self.bot = bot
+        self.guild_id = guild_id
+
+    async def callback(self, interaction: discord.Interaction):
+        selected_pitch = int(self.values[0])
+        settings = self.bot.get_guild_settings(self.guild_id)
+        settings['pitch'] = selected_pitch
+        await interaction.response.send_message(f"✅ TTS 피치가 `{selected_pitch}` 반음으로 변경되었습니다.", ephemeral=True)
+
+
+# --- 감정(Emotion Preset) 선택 셀렉트 메뉴 ---
+class EmotionSelectView(discord.ui.Select):
+    def __init__(self, bot, guild_id, current_emotion):
+        emotions = [
+            ("기본 (normal)", "normal"),
+            ("기쁨 (happy)", "happy"),
+            ("슬픔 (sad)", "sad"),
+            ("화남 (angry)", "angry"),
+            ("속삭임 (whisper)", "whisper"),
+            ("톤업 (toneup)", "toneup"),
+            ("톤다운 (tonedown)", "tonedown")
+        ]
+        options = [
+            discord.SelectOption(label=label, value=val, default=(current_emotion == val))
+            for label, val in emotions
+        ]
+        super().__init__(placeholder="감정(Emotion) 선택", options=options)
+        self.bot = bot
+        self.guild_id = guild_id
+
+    async def callback(self, interaction: discord.Interaction):
+        selected_emotion = self.values[0]
+        settings = self.bot.get_guild_settings(self.guild_id)
+        settings['emotion_preset'] = selected_emotion
+        await interaction.response.send_message(f"✅ TTS 감정이 `{selected_emotion}`(으)로 변경되었습니다.", ephemeral=True)
+
+
+# --- 감정 강도(Emotion Intensity) 선택 셀렉트 메뉴 ---
+class IntensitySelectView(discord.ui.Select):
+    def __init__(self, bot, guild_id, current_intensity):
+        intensities = [
+            ("강도 0.0 (없음)", 0.0),
+            ("강도 0.5 (약함)", 0.5),
+            ("강도 1.0 (기본)", 1.0),
+            ("강도 1.5 (강함)", 1.5),
+            ("강도 2.0 (매우 강함)", 2.0)
+        ]
+        options = [
+            discord.SelectOption(label=label, value=str(val), default=(abs(current_intensity - val) < 0.05))
+            for label, val in intensities
+        ]
+        super().__init__(placeholder="감정 강도 선택 (0.0 ~ 2.0)", options=options)
+        self.bot = bot
+        self.guild_id = guild_id
+
+    async def callback(self, interaction: discord.Interaction):
+        selected_intensity = float(self.values[0])
+        settings = self.bot.get_guild_settings(self.guild_id)
+        settings['emotion_intensity'] = selected_intensity
+        await interaction.response.send_message(f"✅ 감정 강도가 `{selected_intensity}`(으)로 변경되었습니다.", ephemeral=True)
+
+
+# --- TTS 설정 통합 뷰 ---
 class TTSSettingsView(discord.ui.View):
-    def __init__(self, bot, guild_id, is_admin=False):
+    def __init__(self, bot, guild_id):
         super().__init__(timeout=60)
         self.bot = bot
         self.guild_id = guild_id
 
         settings = bot.get_guild_settings(guild_id)
 
-        if is_admin:
-            self.add_item(ChannelSelectView(bot, guild_id, settings.get('channel_id')))
-
         self.add_item(VoiceSelectView(bot, guild_id, settings.get('voice_name', 'tc_5c547544fcfee90007fed455')))
         self.add_item(TempoSelectView(bot, guild_id, settings.get('tempo', 1.0)))
+        self.add_item(PitchSelectView(bot, guild_id, settings.get('pitch', 0)))
+        self.add_item(EmotionSelectView(bot, guild_id, settings.get('emotion_preset', 'normal')))
+        self.add_item(IntensitySelectView(bot, guild_id, settings.get('emotion_intensity', 1.0)))
 
 
 class TTSBot(discord.Client):
@@ -207,8 +241,12 @@ class TTSBot(discord.Client):
             self.guild_settings[guild_id] = {
                 'voice_name': 'tc_5c547544fcfee90007fed455',
                 'tempo': 1.0,
+                'pitch': 0,
+                'emotion_preset': 'normal',
+                'emotion_intensity': 1.0,
                 'read_non_vc': False,
                 'channel_id': None,
+                'original_channel_name': None,
                 'temp_channel_id': None
             }
         return self.guild_settings[guild_id]
@@ -219,19 +257,11 @@ class TTSBot(discord.Client):
 bot = TTSBot()
 
 async def play_tts(vc, filename):
-    """음성 재생 공통 함수 (로컬 파일 재생용 FFmpeg 설정)"""
     ffmpeg_executable = "./ffmpeg.exe" if os.path.exists("./ffmpeg.exe") else "ffmpeg"
-    
-    ffmpeg_options = {
-        'options': '-vn'
-    }
+    ffmpeg_options = {'options': '-vn'}
 
     try:
-        raw_audio = discord.FFmpegPCMAudio(
-            filename,
-            executable=ffmpeg_executable,
-            **ffmpeg_options
-        )
+        raw_audio = discord.FFmpegPCMAudio(filename, executable=ffmpeg_executable, **ffmpeg_options)
         audio_source = discord.PCMVolumeTransformer(raw_audio, volume=1.0)
         
         def after_playing(error):
@@ -259,18 +289,15 @@ async def on_voice_state_update(member, before, after):
 
     settings = bot.get_guild_settings(member.guild.id)
     vc = member.guild.voice_client
-
     display_name_korean = auto_roman_to_korean(member.display_name)
-    tempo = settings.get('tempo', 1.0)
 
     if before.channel is None and after.channel is not None:
         if vc and after.channel == vc.channel:
             tts_text = f"{display_name_korean} 어하"
-            voice_name = settings.get('voice_name', 'tc_5c547544fcfee90007fed455')
             filename = f"tts_join_{member.id}_{int(time.time())}.wav"
 
             try:
-                audio_content = await asyncio.to_thread(generate_typecast_tts, tts_text, voice_name, tempo)
+                audio_content = await asyncio.to_thread(generate_typecast_tts, tts_text, settings)
                 with open(filename, "wb") as out:
                     out.write(audio_content)
 
@@ -284,11 +311,10 @@ async def on_voice_state_update(member, before, after):
     elif before.channel is not None and after.channel is None:
         if vc and before.channel == vc.channel:
             tts_text = f"{display_name_korean} 어바"
-            voice_name = settings.get('voice_name', 'tc_5c547544fcfee90007fed455')
             filename = f"tts_leave_{member.id}_{int(time.time())}.wav"
 
             try:
-                audio_content = await asyncio.to_thread(generate_typecast_tts, tts_text, voice_name, tempo)
+                audio_content = await asyncio.to_thread(generate_typecast_tts, tts_text, settings)
                 with open(filename, "wb") as out:
                     out.write(audio_content)
 
@@ -359,13 +385,77 @@ async def leave_vc(interaction: discord.Interaction):
     else:
         await interaction.response.send_message("❌ 현재 통화방에 입장해 있지 않습니다.", ephemeral=True)
 
-@bot.tree.command(name="tts설정", description="TTS 목소리, 속도 및 전용 채널을 설정합니다.")
-async def config_tts(interaction: discord.Interaction):
+# --- 채널 생성 / 지정 / 해제 통합 명령어 ---
+@bot.tree.command(name="tts채널", description="TTS 전용 채널을 생성, 지정 또는 해제합니다.")
+@app_commands.choices(action=[
+    app_commands.Choice(name="생성 (새로운 TTS 전용 채널 자동 생성 및 지정)", value="create"),
+    app_commands.Choice(name="지정 (현재 채널을 𝗧𝗧𝗦로 변경 후 TTS 채널 지정)", value="set"),
+    app_commands.Choice(name="해제 (고정 TTS 채널 해제 및 원래 이름 복구)", value="clear")
+])
+async def set_tts_channel(interaction: discord.Interaction, action: str):
     permissions = interaction.channel.permissions_for(interaction.user)
-    is_admin = permissions.manage_channels or permissions.administrator
+    if not (permissions.manage_channels or permissions.administrator):
+        await interaction.response.send_message("❌ 관리자 권한이 필요합니다.", ephemeral=True)
+        return
 
-    view = TTSSettingsView(bot, interaction.guild_id, is_admin=is_admin)
-    await interaction.response.send_message("", view=view, ephemeral=True)
+    settings = bot.get_guild_settings(interaction.guild_id)
+
+    if action == "create":
+        await interaction.response.defer(ephemeral=True)
+        try:
+            # 특수 폰트 채널명 '𝗧𝗧𝗦' 생성
+            new_channel = await interaction.guild.create_text_channel(
+                name="𝗧𝗧𝗦",
+                reason="TTS 전용 채널 자동 생성"
+            )
+            settings['channel_id'] = new_channel.id
+            settings['original_channel_name'] = "𝗧𝗧𝗦"
+            settings['temp_channel_id'] = None
+            await interaction.followup.send(f"✅ 새로운 TTS 전용 채널 {new_channel.mention} 이(가) 생성되었으며, TTS 채널로 지정되었습니다!", ephemeral=True)
+        except discord.Forbidden:
+            await interaction.followup.send("❌ 봇에게 '채널 관리(Manage Channels)' 권한이 없어 채널을 생성하지 못했습니다.", ephemeral=True)
+        except Exception as e:
+            await interaction.followup.send(f"❌ 채널 생성 중 오류가 발생했습니다: {e}", ephemeral=True)
+
+    elif action == "set":
+        await interaction.response.defer(ephemeral=True)
+        try:
+            # 기존 이름 저장 후 채널 이름을 '𝗧𝗧𝗦'로 변경
+            original_name = interaction.channel.name
+            settings['original_channel_name'] = original_name
+            settings['channel_id'] = interaction.channel_id
+            settings['temp_channel_id'] = None
+
+            await interaction.channel.edit(name="𝗧𝗧𝗦", reason="TTS 채널 지정으로 인한 이름 변경")
+            await interaction.followup.send(f"✅ {interaction.channel.mention} 채널이 `𝗧𝗧𝗦`로 변경되었으며 고정 TTS 채널로 지정되었습니다! (이전 이름: `{original_name}`)", ephemeral=True)
+        except discord.Forbidden:
+            await interaction.followup.send("❌ 봇에게 '채널 관리(Manage Channels)' 권한이 없어 채널 이름을 변경하지 못했습니다.", ephemeral=True)
+        except Exception as e:
+            await interaction.followup.send(f"❌ 채널 이름 변경 중 오류가 발생했습니다: {e}", ephemeral=True)
+
+    elif action == "clear":
+        await interaction.response.defer(ephemeral=True)
+        target_channel_id = settings.get('channel_id')
+        original_name = settings.get('original_channel_name')
+
+        if target_channel_id:
+            channel = interaction.guild.get_channel(target_channel_id)
+            if channel and original_name:
+                try:
+                    await channel.edit(name=original_name, reason="TTS 채널 해제로 인한 원래 이름 복구")
+                except discord.Forbidden:
+                    await interaction.followup.send("⚠ 권한이 부족하여 채널 이름을 원래대로 복구하지 못했습니다.", ephemeral=True)
+                except Exception as e:
+                    print(f"❌ 채널 이름 복구 중 오류: {e}")
+
+        settings['channel_id'] = None
+        settings['original_channel_name'] = None
+        await interaction.followup.send("✅ 고정 TTS 채널 설정이 해제되었으며 원래 이름으로 복구되었습니다.", ephemeral=True)
+
+@bot.tree.command(name="tts설정", description="TTS 목소리, 속도, 피치, 감정 및 강도를 설정합니다.")
+async def config_tts(interaction: discord.Interaction):
+    view = TTSSettingsView(bot, interaction.guild_id)
+    await interaction.response.send_message("🎙 **TTS 음성 옵션 설정**", view=view, ephemeral=True)
 
 
 # --- 메시지 감지 영역 ---
@@ -379,7 +469,6 @@ async def on_message(message):
     target_channel_id = settings.get('channel_id') or settings.get('temp_channel_id')
 
     author_name = auto_roman_to_korean(message.author.display_name)
-    tempo = settings.get('tempo', 1.0)
 
     if message.webhook_id is not None:
         if message.channel.id == target_channel_id:
@@ -412,11 +501,10 @@ async def on_message(message):
                 voice_client = message.guild.voice_client
                 if voice_client and (message.author.voice and message.author.voice.channel == voice_client.channel or settings.get('read_non_vc')):
                     tts_text = f"{author_name}님이 이모지를 보냈습니다."
-                    voice_name = settings.get('voice_name', 'tc_5c547544fcfee90007fed455')
                     filename = f"tts_emoji_{message.id}.wav"
 
                     try:
-                        audio_content = await asyncio.to_thread(generate_typecast_tts, tts_text, voice_name, tempo)
+                        audio_content = await asyncio.to_thread(generate_typecast_tts, tts_text, settings)
                         with open(filename, "wb") as out:
                             out.write(audio_content)
 
@@ -452,9 +540,7 @@ async def on_message(message):
     def replace_user_mention(match):
         user_id = int(match.group(1))
         member = message.guild.get_member(user_id)
-        if member:
-            return auto_roman_to_korean(member.display_name)
-        return "알 수 없는 유저"
+        return auto_roman_to_korean(member.display_name) if member else "알 수 없는 유저"
 
     raw_text = re.sub(r"<@!?(\d+)>", replace_user_mention, raw_text)
 
@@ -498,12 +584,7 @@ async def on_message(message):
 
     filename = f"tts_{message.id}.wav"
     try:
-        audio_content = await asyncio.to_thread(
-            generate_typecast_tts,
-            tts_text,
-            settings.get('voice_name', 'tc_5c547544fcfee90007fed455'),
-            tempo
-        )
+        audio_content = await asyncio.to_thread(generate_typecast_tts, tts_text, settings)
         with open(filename, "wb") as out:
             out.write(audio_content)
     except Exception as e:
