@@ -1,14 +1,15 @@
-import sys, subprocess, os, site, json, re, asyncio, base64, discord
+import sys, subprocess, os, site, json, re, asyncio, time, requests, discord
 from discord import app_commands
 from dotenv import load_dotenv
-from googleapiclient.discovery import build
-from google.oauth2 import service_account
 from keep_alive import keep_alive
 
 site.main()
 load_dotenv()
 
 keep_alive()
+
+# --- 환경변수 로드 ---
+TTS_API = os.getenv("TTS_API")
 
 # --- 채팅 메시지 변환용 딕셔너리 ---
 INITIAL_REPLACEMENTS = {
@@ -31,32 +32,55 @@ INITIAL_REPLACEMENTS = {
     "ㅇㅋ": "오키"
 }
 
-private_key = os.getenv("private_key", "")
-if private_key:
-    private_key = private_key.replace("\\n", "\n")
+# --- Typecast API 동기 요청 함수 (asyncio.to_thread로 실행) ---
+def generate_typecast_tts(text: str, actor_id: str, speed: str) -> bytes:
+    if not TTS_API:
+        raise ValueError("TTS_API가 설정되지 않았어!")
 
-google_credentials = {
-    "type": "service_account",
-    "project_id": "gen-lang-client-0463073512",
-    "private_key_id": os.getenv("private_key_id"),
-    "private_key": private_key,
-    "client_email": "tts-bot-key@gen-lang-client-0463073512.iam.gserviceaccount.com",
-    "client_id": "102784716861828821559",
-    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-    "token_uri": "https://oauth2.googleapis.com/token",
-    "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
-    "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/tts-bot-key%40gen-lang-client-0463073512.iam.gserviceaccount.com",
-    "universe_domain": "googleapis.com"
-}
+    url = "https://typecast.ai/api/v1/synth"
+    headers = {
+        "Authorization": f"Bearer {TTS_API}",
+        "Content-Type": "application/json"
+    }
+    
+    payload = {
+        "text": text,
+        "actor_id": actor_id,
+        "xspeed": float(speed),
+        "model_version": "latest"
+    }
 
-credentials = service_account.Credentials.from_service_account_info(google_credentials)
+    # 1. 음성 합성 요청
+    response = requests.post(url, json=payload, headers=headers)
+    response.raise_for_status()
+    data = response.json()
+    synth_id = data["result"]["synth_id"]
+
+    # 2. 결과 폴링 대기
+    poll_url = f"https://typecast.ai/api/v1/synth/{synth_id}"
+    while True:
+        poll_res = requests.get(poll_url, headers=headers).json()
+        status = poll_res["result"]["status"]
+        
+        if status == "done":
+            audio_url = poll_res["result"]["audio_url"]
+            break
+        elif status == "failed":
+            raise Exception("Typecast TTS 생성 실패")
+        
+        time.sleep(0.3)
+
+    # 3. 음성 파일 다운로드
+    audio_bytes = requests.get(audio_url).content
+    return audio_bytes
+
 
 # --- 관리자 전용 채널 선택 셀렉트 메뉴 ---
 class ChannelSelectView(discord.ui.ChannelSelect):
     def __init__(self, bot, guild_id, current_channel_id=None):
         super().__init__(
             channel_types=[discord.ChannelType.text],
-            placeholder="TTS 채널을 선택해 주세요."
+            placeholder="TTS 채널을 선택해 줘."
         )
         self.bot = bot
         self.guild_id = guild_id
@@ -74,16 +98,17 @@ class ChannelSelectView(discord.ui.ChannelSelect):
         settings = self.bot.get_guild_settings(self.guild_id)
         settings['channel_id'] = selected_channel.id
         settings['temp_channel_id'] = None
-        await interaction.response.send_message(f"✅ {selected_channel.mention} 채널이 TTS 채널로 설정되었습니다.", ephemeral=True)
+        await interaction.response.send_message(f"✅ {selected_channel.mention} 채널이 TTS 채널로 설정되었어!", ephemeral=True)
 
-# --- 목소리 선택 셀렉트 메뉴 ---
+
+# --- 목소리 선택 셀렉트 메뉴 (Typecast 배우 ID 적용) ---
 class VoiceSelectView(discord.ui.Select):
     def __init__(self, bot, guild_id, current_voice):
         options = [
-            discord.SelectOption(label="여성 1", value="ko-KR-Neural2-A", default=(current_voice == "ko-KR-Neural2-A")),
-            discord.SelectOption(label="여성 2", value="ko-KR-Neural2-B", default=(current_voice == "ko-KR-Neural2-B")),
-            discord.SelectOption(label="남성 1", value="ko-KR-Neural2-C", default=(current_voice == "ko-KR-Neural2-C")),
-            discord.SelectOption(label="남성 2", value="ko-KR-Neural2-D", default=(current_voice == "ko-KR-Neural2-D")),
+            discord.SelectOption(label="여성 1 (하은)", value="60a34b22c0199e46950db8ca", default=(current_voice == "60a34b22c0199e46950db8ca")),
+            discord.SelectOption(label="여성 2 (서연)", value="60cb0958a36c5d1cfd4ff4bf", default=(current_voice == "60cb0958a36c5d1cfd4ff4bf")),
+            discord.SelectOption(label="남성 1 (찬우)", value="60f15c13b2e59174dfd924dd", default=(current_voice == "60f15c13b2e59174dfd924dd")),
+            discord.SelectOption(label="남성 2 (민호)", value="6135ca1029c1d3c0b05b3ff7", default=(current_voice == "6135ca1029c1d3c0b05b3ff7")),
         ]
         super().__init__(placeholder="목소리 설정", options=options)
         self.bot = bot
@@ -93,20 +118,21 @@ class VoiceSelectView(discord.ui.Select):
         settings = self.bot.get_guild_settings(self.guild_id)
         settings['voice_name'] = self.values[0]
         selected_label = next((opt.label for opt in self.options if opt.value == self.values[0]), self.values[0])
-        await interaction.response.send_message(f"✅ TTS 목소리가 `{selected_label}`(으)로 변경되었습니다.", ephemeral=True)
+        await interaction.response.send_message(f"✅ TTS 목소리가 `{selected_label}`(으)로 변경되었어!", ephemeral=True)
+
 
 # --- 속도 선택 셀렉트 메뉴 ---
 class SpeedSelectView(discord.ui.Select):
     def __init__(self, bot, guild_id, current_speed):
         speeds = [
-            ("0.25 배속", "0.25"), ("0.5 배속", "0.5"), ("0.75 배속", "0.75"), ("1 배속", "1.0"),
-            ("1.25 배속", "1.25"), ("1.5 배속", "1.5"), ("1.75 배속", "1.75"), ("2 배속", "2.0")
+            ("0.5 배속", "0.5"), ("0.75 배속", "0.75"), ("1 배속", "1.0"),
+            ("1.25 배속", "1.25"), ("1.5 배속", "1.5"), ("2 배속", "2.0")
         ]
         options = [
             discord.SelectOption(label=label, value=val, default=(current_speed == val))
             for label, val in speeds
         ]
-        super().__init__(placeholder="재생 속도를 선택해 주세요", options=options)
+        super().__init__(placeholder="재생 속도를 선택해 줘", options=options)
         self.bot = bot
         self.guild_id = guild_id
 
@@ -114,7 +140,8 @@ class SpeedSelectView(discord.ui.Select):
         settings = self.bot.get_guild_settings(self.guild_id)
         settings['speed'] = self.values[0]
         selected_label = next((opt.label for opt in self.options if opt.value == self.values[0]), self.values[0])
-        await interaction.response.send_message(f"✅ TTS 속도가 `{selected_label}배속`(으)로 변경되었습니다.", ephemeral=True)
+        await interaction.response.send_message(f"✅ TTS 속도가 `{selected_label}`(으)로 변경되었어!", ephemeral=True)
+
 
 # --- TTS 설정 뷰 ---
 class TTSSettingsView(discord.ui.View):
@@ -128,8 +155,9 @@ class TTSSettingsView(discord.ui.View):
         if is_admin:
             self.add_item(ChannelSelectView(bot, guild_id, settings.get('channel_id')))
 
-        self.add_item(VoiceSelectView(bot, guild_id, settings.get('voice_name', 'ko-KR-Neural2-A')))
+        self.add_item(VoiceSelectView(bot, guild_id, settings.get('voice_name', '60a34b22c0199e46950db8ca')))
         self.add_item(SpeedSelectView(bot, guild_id, settings.get('speed', '1.0')))
+
 
 class TTSBot(discord.Client):
     def __init__(self):
@@ -139,12 +167,11 @@ class TTSBot(discord.Client):
         super().__init__(intents=intents)
         self.tree = app_commands.CommandTree(self)
         self.guild_settings = {}
-        self.tts_client = build('texttospeech', 'v1', credentials=credentials)
 
     def get_guild_settings(self, guild_id):
         if guild_id not in self.guild_settings:
             self.guild_settings[guild_id] = {
-                'voice_name': 'ko-KR-Neural2-A',
+                'voice_name': '60a34b22c0199e46950db8ca',
                 'speed': '1.0',
                 'read_non_vc': False,
                 'channel_id': None,
@@ -163,6 +190,7 @@ async def on_ready():
     await bot.change_presence(status=discord.Status.online, activity=activity)
     print(f"✅ 로그인 성공: {bot.user.name} (상태 메시지 설정 완료)")
 
+
 # --- 음성 상태 변경 이벤트 ---
 @bot.event
 async def on_voice_state_update(member, before, after):
@@ -175,12 +203,12 @@ async def on_voice_state_update(member, before, after):
     if before.channel is None and after.channel is not None:
         if vc and after.channel == vc.channel:
             tts_text = f"{member.display_name} 어하"
-            voice_name = settings.get('voice_name', 'ko-KR-Neural2-A')
+            voice_name = settings.get('voice_name', '60a34b22c0199e46950db8ca')
             speed = settings.get('speed', '1.0')
             filename = f"tts_join_{member.id}_{int(asyncio.get_event_loop().time())}.mp3"
 
             try:
-                audio_content = generate_google_tts(bot.tts_client, tts_text, voice_name)
+                audio_content = await asyncio.to_thread(generate_typecast_tts, tts_text, voice_name, speed)
                 with open(filename, "wb") as out:
                     out.write(audio_content)
 
@@ -192,7 +220,7 @@ async def on_voice_state_update(member, before, after):
                     asyncio.run_coroutine_threadsafe(remove_file_safely(filename), bot.loop)
 
                 ffmpeg_executable = "./ffmpeg.exe" if os.path.exists("./ffmpeg.exe") else "ffmpeg"
-                raw_audio = discord.FFmpegPCMAudio(filename, executable=ffmpeg_executable, options=f'-af atempo={speed}')
+                raw_audio = discord.FFmpegPCMAudio(filename, executable=ffmpeg_executable)
                 audio_source = discord.PCMVolumeTransformer(raw_audio, volume=0.25)
                 vc.play(audio_source, after=after_playing)
             except Exception as e:
@@ -201,12 +229,12 @@ async def on_voice_state_update(member, before, after):
     elif before.channel is not None and after.channel is None:
         if vc and before.channel == vc.channel:
             tts_text = f"{member.display_name} 어바"
-            voice_name = settings.get('voice_name', 'ko-KR-Neural2-A')
+            voice_name = settings.get('voice_name', '60a34b22c0199e46950db8ca')
             speed = settings.get('speed', '1.0')
             filename = f"tts_leave_{member.id}_{int(asyncio.get_event_loop().time())}.mp3"
 
             try:
-                audio_content = generate_google_tts(bot.tts_client, tts_text, voice_name)
+                audio_content = await asyncio.to_thread(generate_typecast_tts, tts_text, voice_name, speed)
                 with open(filename, "wb") as out:
                     out.write(audio_content)
 
@@ -218,7 +246,7 @@ async def on_voice_state_update(member, before, after):
                     asyncio.run_coroutine_threadsafe(remove_file_safely(filename), bot.loop)
 
                 ffmpeg_executable = "./ffmpeg.exe" if os.path.exists("./ffmpeg.exe") else "ffmpeg"
-                raw_audio = discord.FFmpegPCMAudio(filename, executable=ffmpeg_executable, options=f'-af atempo={speed}')
+                raw_audio = discord.FFmpegPCMAudio(filename, executable=ffmpeg_executable)
                 audio_source = discord.PCMVolumeTransformer(raw_audio, volume=0.25)
                 vc.play(audio_source, after=after_playing)
             except Exception as e:
@@ -231,7 +259,7 @@ async def on_voice_state_update(member, before, after):
     if len(human_members) == 0:
         await vc.disconnect()
         settings['temp_channel_id'] = None
-        print(f"⚠ {member.guild.name} 서버 음성 채널에 아무도 없어서 자동 퇴장했습니다.")
+        print(f"⚠ {member.guild.name} 서버 음성 채널에 아무도 없어서 자동 퇴장했어.")
 
 async def remove_file_safely(filepath):
     await asyncio.sleep(1)
@@ -250,22 +278,13 @@ async def delete_message_after_delay(message, delay=10):
     except Exception as e:
         print(f"❌ 메시지 자동 삭제 실패: {e}")
 
-def generate_google_tts(client, text, voice_name):
-    body = {
-        'input': {'text': text},
-        'voice': {'languageCode': 'ko-KR', 'name': voice_name},
-        'audioConfig': {'audioEncoding': 'MP3'}
-    }
-    request = client.text().synthesize(body=body)
-    response = request.execute()
-    return base64.b64decode(response['audioContent'])
 
 # --- 명령어 영역 ---
 
 @bot.tree.command(name="입장", description="TTS 봇을 음성 채널에 입장시킵니다.")
 async def join_vc(interaction: discord.Interaction):
     if not interaction.user.voice or not interaction.user.voice.channel:
-        await interaction.response.send_message("❌ 먼저 음성 채널에 입장해야 합니다.", ephemeral=True)
+        await interaction.response.send_message("❌ 먼저 음성 채널에 입장해야 해!", ephemeral=True)
         return
 
     voice_channel = interaction.user.voice.channel
@@ -280,7 +299,7 @@ async def join_vc(interaction: discord.Interaction):
     if not settings.get('channel_id'):
         settings['temp_channel_id'] = interaction.channel_id
 
-    await interaction.response.send_message(f"🔊 {voice_channel.mention} 채널이 설정되었습니다.", ephemeral=True)
+    await interaction.response.send_message(f"🔊 {voice_channel.mention} 채널이 설정되었어!", ephemeral=True)
 
 @bot.tree.command(name="퇴장", description="봇을 음성 채널에서 내보냅니다.")
 async def leave_vc(interaction: discord.Interaction):
@@ -289,9 +308,9 @@ async def leave_vc(interaction: discord.Interaction):
         await vc.disconnect()
         settings = bot.get_guild_settings(interaction.guild_id)
         settings['temp_channel_id'] = None
-        await interaction.response.send_message("✔ 음성 채널에서 퇴장하였습니다.", ephemeral=True)
+        await interaction.response.send_message("✔ 음성 채널에서 퇴장하였어!", ephemeral=True)
     else:
-        await interaction.response.send_message("❌ 현재 통화방에 들어가 있지 않습니다.", ephemeral=True)
+        await interaction.response.send_message("❌ 현재 통화방에 들어가 있지 않아.", ephemeral=True)
 
 @bot.tree.command(name="tts설정", description="TTS 목소리, 속도 및 전용 채널을 설정합니다.")
 async def config_tts(interaction: discord.Interaction):
@@ -300,6 +319,7 @@ async def config_tts(interaction: discord.Interaction):
 
     view = TTSSettingsView(bot, interaction.guild_id, is_admin=is_admin)
     await interaction.response.send_message("", view=view, ephemeral=True)
+
 
 # --- 메시지 감지 영역 ---
 
@@ -342,12 +362,12 @@ async def on_message(message):
                 voice_client = message.guild.voice_client
                 if voice_client and (message.author.voice and message.author.voice.channel == voice_client.channel or settings.get('read_non_vc')):
                     tts_text = f"{message.author.display_name}님이 이모지를 보냈습니다."
-                    voice_name = settings.get('voice_name', 'ko-KR-Neural2-A')
+                    voice_name = settings.get('voice_name', '60a34b22c0199e46950db8ca')
                     speed = settings.get('speed', '1.0')
                     filename = f"tts_emoji_{message.id}.mp3"
 
                     try:
-                        audio_content = generate_google_tts(bot.tts_client, tts_text, voice_name)
+                        audio_content = await asyncio.to_thread(generate_typecast_tts, tts_text, voice_name, speed)
                         with open(filename, "wb") as out:
                             out.write(audio_content)
 
@@ -359,14 +379,14 @@ async def on_message(message):
                             asyncio.run_coroutine_threadsafe(remove_file_safely(filename), bot.loop)
 
                         ffmpeg_executable = "./ffmpeg.exe" if os.path.exists("./ffmpeg.exe") else "ffmpeg"
-                        raw_audio = discord.FFmpegPCMAudio(filename, executable=ffmpeg_executable, options=f'-af atempo={speed}')
+                        raw_audio = discord.FFmpegPCMAudio(filename, executable=ffmpeg_executable)
                         audio_source = discord.PCMVolumeTransformer(raw_audio, volume=0.25)
                         voice_client.play(audio_source, after=after_playing)
                     except Exception as e:
-                        print(f"❌ 구글 TTS 생성 실패: {e}")
+                        print(f"❌ Typecast TTS 생성 실패: {e}")
             return
         except Exception as e:
-            print(f"❌     이모지 전송 실패: {e}")
+            print(f"❌ 이모지 전송 실패: {e}")
 
     if message.channel.id != target_channel_id: 
         return
@@ -436,11 +456,16 @@ async def on_message(message):
 
     filename = f"tts_{message.id}.mp3"
     try:
-        audio_content = generate_google_tts(bot.tts_client, tts_text, settings.get('voice_name', 'ko-KR-Neural2-A'))
+        audio_content = await asyncio.to_thread(
+            generate_typecast_tts,
+            tts_text,
+            settings.get('voice_name', '60a34b22c0199e46950db8ca'),
+            settings.get('speed', '1.0')
+        )
         with open(filename, "wb") as out:
             out.write(audio_content)
     except Exception as e:
-        print(f"❌ 구글 TTS 생성 실패: {e}")
+        print(f"❌ Typecast TTS 생성 실패: {e}")
         return
 
     while voice_client.is_playing(): 
@@ -451,7 +476,7 @@ async def on_message(message):
         asyncio.run_coroutine_threadsafe(remove_file_safely(filename), bot.loop)
 
     ffmpeg_executable = "./ffmpeg.exe" if os.path.exists("./ffmpeg.exe") else "ffmpeg"
-    raw_audio = discord.FFmpegPCMAudio(filename, executable=ffmpeg_executable, options=f"-af atempo={settings.get('speed', '1.0')}")
+    raw_audio = discord.FFmpegPCMAudio(filename, executable=ffmpeg_executable)
     audio_source = discord.PCMVolumeTransformer(raw_audio, volume=0.25)
     voice_client.play(audio_source, after=after_playing)
 
