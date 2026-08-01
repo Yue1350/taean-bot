@@ -411,7 +411,7 @@ async def set_tts_channel(interaction: discord.Interaction, action: str):
             settings['channel_id'] = new_channel.id
             settings['original_channel_name'] = "𝗧𝗧𝗦"
             settings['temp_channel_id'] = None
-            await interaction.followup.send(f"✅ 새로운 TTS 전용 채널 {new_channel.mention} 이(가) 생성되었으며, TTS 채널로 지정되었습니다!", ephemeral=True)
+            await interaction.followup.send(f"🔊 {new_channel.mention} 채널이 TTS 채널로 지정되었습니다!", ephemeral=True)
         except discord.Forbidden:
             await interaction.followup.send("❌ 봇에게 '채널 관리(Manage Channels)' 권한이 없어 채널을 생성하지 못했습니다.", ephemeral=True)
         except Exception as e:
@@ -420,14 +420,13 @@ async def set_tts_channel(interaction: discord.Interaction, action: str):
     elif action == "set":
         await interaction.response.defer(ephemeral=True)
         try:
-            # 기존 이름 저장 후 채널 이름을 '𝗧𝗧𝗦'로 변경
             original_name = interaction.channel.name
             settings['original_channel_name'] = original_name
             settings['channel_id'] = interaction.channel_id
             settings['temp_channel_id'] = None
 
             await interaction.channel.edit(name="𝗧𝗧𝗦", reason="TTS 채널 지정으로 인한 이름 변경")
-            await interaction.followup.send(f"✅ {interaction.channel.mention} 채널이 `𝗧𝗧𝗦`로 변경되었으며 TTS 채널로 지정되었습니다! (이전 이름: `{original_name}`)", ephemeral=True)
+            await interaction.followup.send(f"🔊 {interaction.channel.mention} 채널이 TTS 채널로 지정되었습니다!", ephemeral=True)
         except discord.Forbidden:
             await interaction.followup.send("❌ 봇에게 '채널 관리(Manage Channels)' 권한이 없어 채널 이름을 변경하지 못했습니다.", ephemeral=True)
         except Exception as e:
@@ -436,7 +435,6 @@ async def set_tts_channel(interaction: discord.Interaction, action: str):
     elif action == "clear":
         await interaction.response.defer(ephemeral=True)
         
-        # 채널 이름 수정 로직 제거 후 지정 해제만 수행
         settings['channel_id'] = None
         settings['original_channel_name'] = None
         
