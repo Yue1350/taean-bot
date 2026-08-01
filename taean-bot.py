@@ -387,6 +387,8 @@ async def leave_vc(interaction: discord.Interaction):
 
 # --- 채널 생성 / 지정 / 해제 통합 명령어 ---
 @bot.tree.command(name="tts채널", description="TTS 전용 채널을 생성, 지정 또는 해제합니다.")
+@app_commands.rename(action="작업")
+@app_commands.describe(action="생성/지정/해제")
 @app_commands.choices(action=[
     app_commands.Choice(name="생성", value="create"),
     app_commands.Choice(name="지정", value="set"),
