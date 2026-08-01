@@ -2,19 +2,24 @@ import sys, subprocess, os, site, json, re, asyncio, time, discord
 from discord import app_commands
 from dotenv import load_dotenv
 from typecast import Typecast
+from typecast.models import TTSRequest
 from keep_alive import keep_alive
+from korean_romanizer.romanizer import Romanizer
 
 site.main()
 load_dotenv()
 
 keep_alive()
 
-# --- 환경변수 로드 및 Typecast 클라이언트 생성 ---
-TTS_API = os.getenv("TTS_API")
-if not TTS_API:
-    print("⚠️ 경고: .env 파일에 TTS_API 키가 설정되지 않았습니다.")
+# --- Typecast 클라이언트 초기화 ---
+# TYPECAST_API_KEY 환경변수가 설정되어 있으면 자동으로 로드됩니다.
+try:
+    client = Typecast()
+except Exception as e:
+    print(f"⚠️ Typecast 클라이언트 초기화 경고: {e}")
 
-tc = Typecast(api_key=TTS_API)
+# 로마자 -> 한글 변환기 객체 생성
+romanizer = Romanizer()
 
 # --- 채팅 메시지 변환용 딕셔너리 ---
 INITIAL_REPLACEMENTS = {
@@ -37,31 +42,44 @@ INITIAL_REPLACEMENTS = {
     "ㅇㅋ": "오키"
 }
 
-# --- Typecast SDK 호출 동기 함수 ---
-def generate_typecast_tts(text: str, actor_id: str, speed: str) -> bytes:
-    if not TTS_API:
-        raise ValueError("TTS_API가 설정되지 않았습니다.")
+# --- 영문/언더바 닉네임 및 단어 한글 자동 변환 함수 ---
+def auto_roman_to_korean(text: str) -> str:
+    # 1. 언더바(_)나 하이픈(-)을 띄어쓰기로 변경 ("JEON_HYUN" -> "JEON HYUN")
+    text = text.replace("_", " ").replace("-", " ")
+    
+    # 2. 영문 단어들을 찾아서 한글 발음으로 자동 변환
+    words = text.split()
+    processed_words = []
 
-    try:
-        xspeed_val = float(speed)
-    except ValueError:
-        xspeed_val = 1.0
+    for word in words:
+        # 순수 영문 알파벳만 추출
+        clean_word = re.sub(r'[^a-zA-Z]', '', word)
+        if clean_word:
+            try:
+                # 로마자 한글 역변환 (예: JEON -> 전, HYUN -> 현)
+                korean_word = romanizer.pronounce(clean_word.lower())
+                word = word.replace(clean_word, korean_word)
+            except Exception:
+                pass
+        processed_words.append(word)
 
-    print(f"🎙 [Typecast SDK 요청] Actor ID: {actor_id} | Speed: {xspeed_val} | Text: '{text}'")
+    return " ".join(processed_words)
 
-    # Typecast 공식 SDK 오디오 생성 호출
-    audio = tc.speak(
+# --- Typecast SDK 호출 함수 ---
+def generate_typecast_tts(text: str, voice_id: str) -> bytes:
+    print(f"🎙 [Typecast SDK 요청] Voice ID: {voice_id} | Text: '{text}'")
+
+    response = client.text_to_speech(TTSRequest(
         text=text,
-        actor_id=actor_id,
-        xspeed=xspeed_val,
-        lang="auto"
-    )
+        model="ssfm-v30",
+        voice_id=voice_id
+    ))
 
-    if not audio or not audio.bytes:
+    if not response or not response.audio_data:
         raise Exception("Typecast SDK로부터 음성 데이터를 받아오지 못했습니다.")
 
-    print(f"✅ [Typecast SDK 성공] 오디오 변환 완료 ({len(audio.bytes)} bytes)")
-    return audio.bytes
+    print(f"✅ [Typecast SDK 성공] 음성 변환 완료 (재생시간: {getattr(response, 'duration', '?')}s)")
+    return response.audio_data
 
 
 # --- 관리자 전용 채널 선택 셀렉트 메뉴 ---
@@ -90,7 +108,7 @@ class ChannelSelectView(discord.ui.ChannelSelect):
         await interaction.response.send_message(f"✅ {selected_channel.mention} 채널이 TTS 채널로 설정되었습니다.", ephemeral=True)
 
 
-# --- 목소리 선택 셀렉트 메뉴 (찬구 전용) ---
+# --- 목소리 선택 셀렉트 메뉴 ---
 class VoiceSelectView(discord.ui.Select):
     def __init__(self, bot, guild_id, current_voice):
         options = [
@@ -111,28 +129,6 @@ class VoiceSelectView(discord.ui.Select):
         await interaction.response.send_message(f"✅ TTS 목소리가 `{selected_label}`(으)로 변경되었습니다.", ephemeral=True)
 
 
-# --- 속도 선택 셀렉트 메뉴 ---
-class SpeedSelectView(discord.ui.Select):
-    def __init__(self, bot, guild_id, current_speed):
-        speeds = [
-            ("0.5 배속", "0.5"), ("0.75 배속", "0.75"), ("1 배속", "1.0"),
-            ("1.25 배속", "1.25"), ("1.5 배속", "1.5"), ("2 배속", "2.0")
-        ]
-        options = [
-            discord.SelectOption(label=label, value=val, default=(current_speed == val))
-            for label, val in speeds
-        ]
-        super().__init__(placeholder="재생 속도를 선택해 주세요.", options=options)
-        self.bot = bot
-        self.guild_id = guild_id
-
-    async def callback(self, interaction: discord.Interaction):
-        settings = self.bot.get_guild_settings(self.guild_id)
-        settings['speed'] = self.values[0]
-        selected_label = next((opt.label for opt in self.options if opt.value == self.values[0]), self.values[0])
-        await interaction.response.send_message(f"✅ TTS 속도가 `{selected_label}`(으)로 변경되었습니다.", ephemeral=True)
-
-
 # --- TTS 설정 뷰 ---
 class TTSSettingsView(discord.ui.View):
     def __init__(self, bot, guild_id, is_admin=False):
@@ -146,7 +142,6 @@ class TTSSettingsView(discord.ui.View):
             self.add_item(ChannelSelectView(bot, guild_id, settings.get('channel_id')))
 
         self.add_item(VoiceSelectView(bot, guild_id, settings.get('voice_name', 'tc_5c547544fcfee90007fed455')))
-        self.add_item(SpeedSelectView(bot, guild_id, settings.get('speed', '1.0')))
 
 
 class TTSBot(discord.Client):
@@ -162,7 +157,6 @@ class TTSBot(discord.Client):
         if guild_id not in self.guild_settings:
             self.guild_settings[guild_id] = {
                 'voice_name': 'tc_5c547544fcfee90007fed455',
-                'speed': '1.0',
                 'read_non_vc': False,
                 'channel_id': None,
                 'temp_channel_id': None
@@ -217,15 +211,17 @@ async def on_voice_state_update(member, before, after):
     settings = bot.get_guild_settings(member.guild.id)
     vc = member.guild.voice_client
 
+    # 입장 시 닉네임 한글 변환 적용
+    display_name_korean = auto_roman_to_korean(member.display_name)
+
     if before.channel is None and after.channel is not None:
         if vc and after.channel == vc.channel:
-            tts_text = f"{member.display_name} 어하"
+            tts_text = f"{display_name_korean} 어하"
             voice_name = settings.get('voice_name', 'tc_5c547544fcfee90007fed455')
-            speed = settings.get('speed', '1.0')
-            filename = f"tts_join_{member.id}_{int(time.time())}.mp3"
+            filename = f"tts_join_{member.id}_{int(time.time())}.wav"
 
             try:
-                audio_content = await asyncio.to_thread(generate_typecast_tts, tts_text, voice_name, speed)
+                audio_content = await asyncio.to_thread(generate_typecast_tts, tts_text, voice_name)
                 with open(filename, "wb") as out:
                     out.write(audio_content)
 
@@ -238,13 +234,12 @@ async def on_voice_state_update(member, before, after):
 
     elif before.channel is not None and after.channel is None:
         if vc and before.channel == vc.channel:
-            tts_text = f"{member.display_name} 어바"
+            tts_text = f"{display_name_korean} 어바"
             voice_name = settings.get('voice_name', 'tc_5c547544fcfee90007fed455')
-            speed = settings.get('speed', '1.0')
-            filename = f"tts_leave_{member.id}_{int(time.time())}.mp3"
+            filename = f"tts_leave_{member.id}_{int(time.time())}.wav"
 
             try:
-                audio_content = await asyncio.to_thread(generate_typecast_tts, tts_text, voice_name, speed)
+                audio_content = await asyncio.to_thread(generate_typecast_tts, tts_text, voice_name)
                 with open(filename, "wb") as out:
                     out.write(audio_content)
 
@@ -315,7 +310,7 @@ async def leave_vc(interaction: discord.Interaction):
     else:
         await interaction.response.send_message("❌ 현재 통화방에 입장해 있지 않습니다.", ephemeral=True)
 
-@bot.tree.command(name="tts설정", description="TTS 목소리, 속도 및 전용 채널을 설정합니다.")
+@bot.tree.command(name="tts설정", description="TTS 목소리 및 전용 채널을 설정합니다.")
 async def config_tts(interaction: discord.Interaction):
     permissions = interaction.channel.permissions_for(interaction.user)
     is_admin = permissions.manage_channels or permissions.administrator
@@ -333,6 +328,9 @@ async def on_message(message):
 
     settings = bot.get_guild_settings(message.guild.id)
     target_channel_id = settings.get('channel_id') or settings.get('temp_channel_id')
+
+    # 작성자 닉네임 한글 자동 변환
+    author_name = auto_roman_to_korean(message.author.display_name)
 
     if message.webhook_id is not None:
         if message.channel.id == target_channel_id:
@@ -364,13 +362,12 @@ async def on_message(message):
             if message.channel.id == target_channel_id:
                 voice_client = message.guild.voice_client
                 if voice_client and (message.author.voice and message.author.voice.channel == voice_client.channel or settings.get('read_non_vc')):
-                    tts_text = f"{message.author.display_name}님이 이모지를 보냈습니다."
+                    tts_text = f"{author_name}님이 이모지를 보냈습니다."
                     voice_name = settings.get('voice_name', 'tc_5c547544fcfee90007fed455')
-                    speed = settings.get('speed', '1.0')
-                    filename = f"tts_emoji_{message.id}.mp3"
+                    filename = f"tts_emoji_{message.id}.wav"
 
                     try:
-                        audio_content = await asyncio.to_thread(generate_typecast_tts, tts_text, voice_name, speed)
+                        audio_content = await asyncio.to_thread(generate_typecast_tts, tts_text, voice_name)
                         with open(filename, "wb") as out:
                             out.write(audio_content)
 
@@ -400,14 +397,18 @@ async def on_message(message):
     if not author_in_vc and not settings.get('read_non_vc'): 
         return
 
-    author_name = message.author.display_name
     raw_text = message.content.strip()
+
+    # --- 영문 및 언더바(_) 한글 자동 변환 적용 ---
+    raw_text = auto_roman_to_korean(raw_text)
 
     # --- 1. 유저 언급(<@ID>, <@!ID>) 치환 ---
     def replace_user_mention(match):
         user_id = int(match.group(1))
         member = message.guild.get_member(user_id)
-        return member.display_name if member else "알 수 없는 유저"
+        if member:
+            return auto_roman_to_korean(member.display_name)
+        return "알 수 없는 유저"
 
     raw_text = re.sub(r"<@!?(\d+)>", replace_user_mention, raw_text)
 
@@ -450,13 +451,12 @@ async def on_message(message):
         else:
             tts_text = re.sub(url_pattern, "링크", tts_text)
 
-    filename = f"tts_{message.id}.mp3"
+    filename = f"tts_{message.id}.wav"
     try:
         audio_content = await asyncio.to_thread(
             generate_typecast_tts,
             tts_text,
-            settings.get('voice_name', 'tc_5c547544fcfee90007fed455'),
-            settings.get('speed', '1.0')
+            settings.get('voice_name', 'tc_5c547544fcfee90007fed455')
         )
         with open(filename, "wb") as out:
             out.write(audio_content)
