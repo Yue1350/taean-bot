@@ -164,7 +164,7 @@ async def on_ready():
     await bot.change_presence(status=discord.Status.online, activity=activity)
     print(f"✅ 로그인 성공: {bot.user.name} (상태 메시지 설정 완료)")
 
-# --- 음성 상태 변경 이벤트 (입장/퇴장 TTS 안내 및 혼자 남았을 때 자동 퇴장 처리) ---
+# --- 음성 상태 변경 이벤트 ---
 @bot.event
 async def on_voice_state_update(member, before, after):
     if member.bot:
@@ -387,6 +387,22 @@ async def on_message(message):
 
     author_name = message.author.display_name
     raw_text = message.content.strip()
+
+    # --- 1. 유저 언급(<@ID>, <@!ID>) 치환 ---
+    def replace_user_mention(match):
+        user_id = int(match.group(1))
+        member = message.guild.get_member(user_id)
+        return member.display_name if member else "알 수 없는 유저"
+
+    raw_text = re.sub(r"<@!?(\d+)>", replace_user_mention, raw_text)
+
+    # --- 2. 채널 언급(<#ID>) 치환 ---
+    def replace_channel_mention(match):
+        channel_id = int(match.group(1))
+        channel = message.guild.get_channel(channel_id)
+        return channel.name if channel else "알 수 없는 채널"
+
+    raw_text = re.sub(r"<#(\d+)>", replace_channel_mention, raw_text)
 
     if not raw_text:
         if message.stickers:
