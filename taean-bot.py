@@ -11,12 +11,11 @@ load_dotenv()
 
 keep_alive()
 
-# --- Typecast 클라이언트 초기화 ---
-# TYPECAST_API_KEY 환경변수가 설정되어 있으면 자동으로 로드됩니다.
-try:
-    client = Typecast()
-except Exception as e:
-    print(f"⚠️ Typecast 클라이언트 초기화 경고: {e}")
+# --- 1. Typecast 클라이언트 엄격한 초기화 ---
+# try/except를 제거하여 TYPECAST_API_KEY가 없거나 오류 발생 시 실행 시점에 즉시 실패 로그를 출력합니다.
+print("🔑 Typecast 클라이언트 초기화를 시도합니다...")
+client = Typecast()
+print("✅ Typecast 클라이언트 초기화 성공!")
 
 # --- 채팅 메시지 변환용 딕셔너리 ---
 INITIAL_REPLACEMENTS = {
@@ -41,19 +40,14 @@ INITIAL_REPLACEMENTS = {
 
 # --- 영문/언더바 닉네임 및 단어 한글 자동 변환 함수 ---
 def auto_roman_to_korean(text: str) -> str:
-    # 1. 언더바(_)나 하이픈(-)을 띄어쓰기로 변경 ("JEON_HYUN" -> "JEON HYUN")
     text = text.replace("_", " ").replace("-", " ")
-    
-    # 2. 영문 단어들을 찾아서 한글 발음으로 자동 변환
     words = text.split()
     processed_words = []
 
     for word in words:
-        # 순수 영문 알파벳만 추출
         clean_word = re.sub(r'[^a-zA-Z]', '', word)
         if clean_word:
             try:
-                # Romanizer 객체 생성 시 변환할 텍스트를 인자로 전달
                 r = Romanizer(clean_word.lower())
                 korean_word = r.pronounce()
                 word = word.replace(clean_word, korean_word)
@@ -63,21 +57,27 @@ def auto_roman_to_korean(text: str) -> str:
 
     return " ".join(processed_words)
 
-# --- Typecast SDK 호출 함수 ---
+# --- Typecast SDK 호출 함수 (상세 에러 로깅 적용) ---
 def generate_typecast_tts(text: str, voice_id: str) -> bytes:
     print(f"🎙 [Typecast SDK 요청] Voice ID: {voice_id} | Text: '{text}'")
 
-    response = client.text_to_speech(TTSRequest(
-        text=text,
-        model="ssfm-v30",
-        voice_id=voice_id
-    ))
+    try:
+        response = client.text_to_speech(TTSRequest(
+            text=text,
+            model="ssfm-v30",
+            voice_id=voice_id
+        ))
 
-    if not response or not response.audio_data:
-        raise Exception("Typecast SDK로부터 음성 데이터를 받아오지 못했습니다.")
+        if not response or not response.audio_data:
+            raise Exception("Typecast SDK 응답에 오디오 데이터가 없습니다.")
 
-    print(f"✅ [Typecast SDK 성공] 음성 변환 완료 (재생시간: {getattr(response, 'duration', '?')}s)")
-    return response.audio_data
+        print(f"✅ [Typecast SDK 성공] 음성 변환 완료 (재생시간: {getattr(response, 'duration', '?')}s)")
+        return response.audio_data
+
+    except Exception as e:
+        # SDK 내부에서 발생한 진짜 에러 원인을 콘솔에 상세히 출력
+        print(f"❌ [Typecast SDK API 오류 발생]: {e}")
+        raise e
 
 
 # --- 관리자 전용 채널 선택 셀렉트 메뉴 ---
@@ -209,7 +209,6 @@ async def on_voice_state_update(member, before, after):
     settings = bot.get_guild_settings(member.guild.id)
     vc = member.guild.voice_client
 
-    # 입장 시 닉네임 한글 변환 적용
     display_name_korean = auto_roman_to_korean(member.display_name)
 
     if before.channel is None and after.channel is not None:
@@ -228,7 +227,7 @@ async def on_voice_state_update(member, before, after):
 
                 await play_tts(vc, filename)
             except Exception as e:
-                print(f"❌ 입장 TTS 생성 및 재생 실패: {e}")
+                print(f"❌ 입장 TTS 실패 상세 원인: {e}")
 
     elif before.channel is not None and after.channel is None:
         if vc and before.channel == vc.channel:
@@ -246,7 +245,7 @@ async def on_voice_state_update(member, before, after):
 
                 await play_tts(vc, filename)
             except Exception as e:
-                print(f"❌ 퇴장 TTS 생성 및 재생 실패: {e}")
+                print(f"❌ 퇴장 TTS 실패 상세 원인: {e}")
 
     if not vc or not vc.is_connected():
         return
@@ -327,7 +326,6 @@ async def on_message(message):
     settings = bot.get_guild_settings(message.guild.id)
     target_channel_id = settings.get('channel_id') or settings.get('temp_channel_id')
 
-    # 작성자 닉네임 한글 자동 변환
     author_name = auto_roman_to_korean(message.author.display_name)
 
     if message.webhook_id is not None:
@@ -374,7 +372,7 @@ async def on_message(message):
 
                         await play_tts(voice_client, filename)
                     except Exception as e:
-                        print(f"❌ Typecast SDK 생성 실패: {e}")
+                        print(f"❌ 이모지 TTS 생성 실패 원인: {e}")
             return
         except Exception as e:
             print(f"❌ 이모지 전송 실패: {e}")
@@ -396,11 +394,8 @@ async def on_message(message):
         return
 
     raw_text = message.content.strip()
-
-    # --- 영문 및 언더바(_) 한글 자동 변환 적용 ---
     raw_text = auto_roman_to_korean(raw_text)
 
-    # --- 1. 유저 언급(<@ID>, <@!ID>) 치환 ---
     def replace_user_mention(match):
         user_id = int(match.group(1))
         member = message.guild.get_member(user_id)
@@ -410,7 +405,6 @@ async def on_message(message):
 
     raw_text = re.sub(r"<@!?(\d+)>", replace_user_mention, raw_text)
 
-    # --- 2. 채널 언급(<#ID>) 치환 ---
     def replace_channel_mention(match):
         channel_id = int(match.group(1))
         channel = message.guild.get_channel(channel_id)
@@ -459,7 +453,7 @@ async def on_message(message):
         with open(filename, "wb") as out:
             out.write(audio_content)
     except Exception as e:
-        print(f"❌ Typecast SDK 생성 실패: {e}")
+        print(f"❌ 채팅 메시지 TTS 생성 실패 원인: {e}")
         return
 
     while voice_client.is_playing(): 
