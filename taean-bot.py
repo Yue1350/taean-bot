@@ -310,8 +310,8 @@ class MeetupView(discord.ui.View):
 
     @discord.ui.button(label="투표 마감", style=discord.ButtonStyle.secondary, custom_id="meetup_close", emoji="🔒")
     async def close_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        permissions = interaction.channel.permissions_for(interaction.user)
-        if interaction.user.id == self.author.id or permissions.administrator or permissions.manage_messages:
+        # 오직 투표를 올린 주최자만 마감할 수 있도록 변경
+        if interaction.user.id == self.author.id:
             for child in self.children:
                 child.disabled = True
             
@@ -320,7 +320,7 @@ class MeetupView(discord.ui.View):
             embed.color = discord.Color.dark_grey()
             await interaction.response.edit_message(embed=embed, view=self)
         else:
-            await interaction.response.send_message("❌ 주최자 또는 관리자만 투표를 마감할 수 있어.", ephemeral=True)
+            await interaction.response.send_message("❌ 주최자만 투표를 마감할 수 있어.", ephemeral=True)
 
 
 class TTSBot(discord.Client):
