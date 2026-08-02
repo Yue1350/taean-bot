@@ -239,6 +239,64 @@ class TTSSettingsView(discord.ui.View):
         self.add_item(IntensitySelectView(bot, user_id, settings.get('emotion_intensity', 1.0)))
 
 
+# --- 정모 참석 투표용 뷰 클래스 ---
+class MeetupView(discord.ui.View):
+    def __init__(self, author_id: int, content: str):
+        super().__init__(timeout=None) # 제한 시간 없음
+        self.author_id = author_id
+        self.content = content
+        self.attending = set()
+        self.absent = set()
+
+    def update_embed(self) -> discord.Embed:
+        embed = discord.Embed(
+            title="📅 정모 참석 여부 투표",
+            description=f"**[정모 내용]**\n{self.content}",
+            color=discord.Color.blue()
+        )
+        
+        attending_list = "\n".join([f"• <@{uid}>" for uid in self.attending]) if self.attending else "없음"
+        absent_list = "\n".join([f"• <@{uid}>" for uid in self.absent]) if self.absent else "없음"
+
+        embed.add_field(name=f"⭕ 참석 ({len(self.attending)}명)", value=attending_list, inline=True)
+        embed.add_field(name=f"❌ 불참 ({len(self.absent)}명)", value=absent_list, inline=True)
+        embed.set_footer(text=f"주최자: ID {self.author_id}")
+        return embed
+
+    @discord.ui.button(label="참석", style=discord.ButtonStyle.success, custom_id="meetup_attend", emoji="⭕")
+    async def attend_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        user_id = interaction.user.id
+        self.absent.discard(user_id)
+        self.attending.add(user_id)
+        
+        embed = self.update_embed()
+        await interaction.response.edit_message(embed=embed, view=self)
+
+    @discord.ui.button(label="불참", style=discord.ButtonStyle.danger, custom_id="meetup_absent", emoji="❌")
+    async def absent_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        user_id = interaction.user.id
+        self.attending.discard(user_id)
+        self.absent.add(user_id)
+        
+        embed = self.update_embed()
+        await interaction.response.edit_message(embed=embed, view=self)
+
+    @discord.ui.button(label="투표 마감", style=discord.ButtonStyle.secondary, custom_id="meetup_close", emoji="🔒")
+    async def close_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        permissions = interaction.channel.permissions_for(interaction.user)
+        # 작성자 본인이거나 관리자 권한이 있는 경우만 마감 가능
+        if interaction.user.id == self.author_id or permissions.administrator or permissions.manage_messages:
+            for child in self.children:
+                child.disabled = True
+            
+            embed = self.update_embed()
+            embed.title = "🔒 [마감] 정모 참석 여부 투표"
+            embed.color = discord.Color.dark_grey()
+            await interaction.response.edit_message(embed=embed, view=self)
+        else:
+            await interaction.response.send_message("❌ 주최자 또는 관리자만 투표를 마감할 수 있습니다.", ephemeral=True)
+
+
 class TTSBot(discord.Client):
     def __init__(self):
         intents = discord.Intents.default()
@@ -465,6 +523,28 @@ async def set_tts_channel(interaction: discord.Interaction, action: str):
 async def config_tts(interaction: discord.Interaction):
     view = TTSSettingsView(bot, interaction.user.id)
     await interaction.response.send_message("🎙 **개인 TTS 음성 옵션 설정**", view=view, ephemeral=True)
+
+
+# --- /정모 명령어 ---
+@bot.tree.command(name="정모", description="정모 공지를 작성하고 참석/불참 투표를 진행합니다.")
+@app_commands.describe(info="정모 일시, 장소, 내용 등을 작성해주세요.")
+async def create_meetup(interaction: discord.Interaction, info: str):
+    view = MeetupView(author_id=interaction.user.id, content=info)
+    embed = view.update_embed()
+
+    # 안내 응답을 먼저 보냄
+    await interaction.response.send_message("📌 정모 공지 투표가 생성되었습니다!", ephemeral=True)
+
+    # 채널에 공지 메시지 전송
+    msg = await interaction.channel.send(embed=embed, view=view)
+
+    # 메시지 상단 자동 고정
+    try:
+        await msg.pin(reason="정모 공지 자동 고정")
+    except discord.Forbidden:
+        await interaction.followup.send("⚠️ 봇에게 '메시지 고정(Manage Messages)' 권한이 없어 메시지를 고정하지 못했습니다.", ephemeral=True)
+    except Exception as e:
+        print(f"❌ 메시지 고정 실패: {e}")
 
 
 # --- 메시지 감지 영역 ---
