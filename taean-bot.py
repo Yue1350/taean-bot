@@ -94,9 +94,9 @@ def generate_typecast_tts(text: str, settings: dict) -> bytes:
         raise e
 
 
-# --- 목소리 선택 셀렉트 메뉴 ---
+# --- 개인별 목소리 선택 셀렉트 메뉴 ---
 class VoiceSelectView(discord.ui.Select):
-    def __init__(self, bot, guild_id, current_voice):
+    def __init__(self, bot, user_id, current_voice):
         options = [
             discord.SelectOption(label="찬구", value="tc_5c547544fcfee90007fed455", default=(current_voice == "tc_5c547544fcfee90007fed455")),
             discord.SelectOption(label="주원", value="tc_5c547545fcfee90007fed459", default=(current_voice == "tc_5c547545fcfee90007fed459")),
@@ -116,20 +116,20 @@ class VoiceSelectView(discord.ui.Select):
             discord.SelectOption(label="덕춘", value="tc_5c3c52c95827e00008dd7f34", default=(current_voice == "tc_5c3c52c95827e00008dd7f34")),
             discord.SelectOption(label="키보", value="tc_6100287f568d6198a78bac31", default=(current_voice == "tc_6100287f568d6198a78bac31")),
         ]
-        super().__init__(placeholder="목소리 선택", options=options)
+        super().__init__(placeholder="개인 목소리 선택", options=options)
         self.bot = bot
-        self.guild_id = guild_id
+        self.user_id = user_id
 
     async def callback(self, interaction: discord.Interaction):
-        settings = self.bot.get_guild_settings(self.guild_id)
+        settings = self.bot.get_user_settings(interaction.user.id)
         settings['voice_name'] = self.values[0]
         selected_label = next((opt.label for opt in self.options if opt.value == self.values[0]), self.values[0])
-        await interaction.response.send_message(f"✅ TTS 목소리가 `{selected_label}`(으)로 변경되었습니다.", ephemeral=True)
+        await interaction.response.send_message(f"✅ 개인 TTS 목소리가 `{selected_label}`(으)로 변경되었습니다.", ephemeral=True)
 
 
-# --- 음성 속도 선택 셀렉트 메뉴 ---
+# --- 개인별 음성 속도 선택 셀렉트 메뉴 ---
 class TempoSelectView(discord.ui.Select):
-    def __init__(self, bot, guild_id, current_tempo):
+    def __init__(self, bot, user_id, current_tempo):
         tempo_options = [
             ("0.5배속 (매우 느림)", 0.5), ("0.8배속", 0.8), ("1.0배속 (기본)", 1.0),
             ("1.2배속", 1.2), ("1.5배속", 1.5), ("1.8배속", 1.8), ("2.0배속 (매우 빠름)", 2.0)
@@ -140,18 +140,18 @@ class TempoSelectView(discord.ui.Select):
         ]
         super().__init__(placeholder="음성 속도 선택 (0.5x ~ 2.0x)", options=options)
         self.bot = bot
-        self.guild_id = guild_id
+        self.user_id = user_id
 
     async def callback(self, interaction: discord.Interaction):
         selected_tempo = float(self.values[0])
-        settings = self.bot.get_guild_settings(self.guild_id)
+        settings = self.bot.get_user_settings(interaction.user.id)
         settings['tempo'] = selected_tempo
-        await interaction.response.send_message(f"✅ TTS 속도가 `{selected_tempo}배속`(으)로 변경되었습니다.", ephemeral=True)
+        await interaction.response.send_message(f"✅ 개인 TTS 속도가 `{selected_tempo}배속`(으)로 변경되었습니다.", ephemeral=True)
 
 
-# --- 음성 피치(Pitch) 선택 셀렉트 메뉴 ---
+# --- 개인별 음성 피치(Pitch) 선택 셀렉트 메뉴 ---
 class PitchSelectView(discord.ui.Select):
-    def __init__(self, bot, guild_id, current_pitch):
+    def __init__(self, bot, user_id, current_pitch):
         pitch_options = [
             ("-6 반음 (낮음)", -6), ("-3 반음", -3), ("0 반음 (기본)", 0),
             ("+3 반음", 3), ("+6 반음 (높음)", 6)
@@ -162,18 +162,18 @@ class PitchSelectView(discord.ui.Select):
         ]
         super().__init__(placeholder="음성 피치(Pitch) 선택 (-12 ~ +12)", options=options)
         self.bot = bot
-        self.guild_id = guild_id
+        self.user_id = user_id
 
     async def callback(self, interaction: discord.Interaction):
         selected_pitch = int(self.values[0])
-        settings = self.bot.get_guild_settings(self.guild_id)
+        settings = self.bot.get_user_settings(interaction.user.id)
         settings['pitch'] = selected_pitch
-        await interaction.response.send_message(f"✅ TTS 피치가 `{selected_pitch}` 반음으로 변경되었습니다.", ephemeral=True)
+        await interaction.response.send_message(f"✅ 개인 TTS 피치가 `{selected_pitch}` 반음으로 변경되었습니다.", ephemeral=True)
 
 
-# --- 감정(Emotion Preset) 선택 셀렉트 메뉴 ---
+# --- 개인별 감정(Emotion Preset) 선택 셀렉트 메뉴 ---
 class EmotionSelectView(discord.ui.Select):
-    def __init__(self, bot, guild_id, current_emotion):
+    def __init__(self, bot, user_id, current_emotion):
         emotions = [
             ("기본 (normal)", "normal"),
             ("기쁨 (happy)", "happy"),
@@ -189,18 +189,18 @@ class EmotionSelectView(discord.ui.Select):
         ]
         super().__init__(placeholder="감정(Emotion) 선택", options=options)
         self.bot = bot
-        self.guild_id = guild_id
+        self.user_id = user_id
 
     async def callback(self, interaction: discord.Interaction):
         selected_emotion = self.values[0]
-        settings = self.bot.get_guild_settings(self.guild_id)
+        settings = self.bot.get_user_settings(interaction.user.id)
         settings['emotion_preset'] = selected_emotion
-        await interaction.response.send_message(f"✅ TTS 감정이 `{selected_emotion}`(으)로 변경되었습니다.", ephemeral=True)
+        await interaction.response.send_message(f"✅ 개인 TTS 감정이 `{selected_emotion}`(으)로 변경되었습니다.", ephemeral=True)
 
 
-# --- 감정 강도(Emotion Intensity) 선택 셀렉트 메뉴 ---
+# --- 개인별 감정 강도(Emotion Intensity) 선택 셀렉트 메뉴 ---
 class IntensitySelectView(discord.ui.Select):
-    def __init__(self, bot, guild_id, current_intensity):
+    def __init__(self, bot, user_id, current_intensity):
         intensities = [
             ("강도 0.0 (없음)", 0.0),
             ("강도 0.5 (약함)", 0.5),
@@ -214,29 +214,29 @@ class IntensitySelectView(discord.ui.Select):
         ]
         super().__init__(placeholder="감정 강도 선택 (0.0 ~ 2.0)", options=options)
         self.bot = bot
-        self.guild_id = guild_id
+        self.user_id = user_id
 
     async def callback(self, interaction: discord.Interaction):
         selected_intensity = float(self.values[0])
-        settings = self.bot.get_guild_settings(self.guild_id)
+        settings = self.bot.get_user_settings(interaction.user.id)
         settings['emotion_intensity'] = selected_intensity
-        await interaction.response.send_message(f"✅ 감정 강도가 `{selected_intensity}`(으)로 변경되었습니다.", ephemeral=True)
+        await interaction.response.send_message(f"✅ 개인 감정 강도가 `{selected_intensity}`(으)로 변경되었습니다.", ephemeral=True)
 
 
-# --- TTS 설정 통합 뷰 ---
+# --- 개인 TTS 설정 통합 뷰 ---
 class TTSSettingsView(discord.ui.View):
-    def __init__(self, bot, guild_id):
+    def __init__(self, bot, user_id):
         super().__init__(timeout=60)
         self.bot = bot
-        self.guild_id = guild_id
+        self.user_id = user_id
 
-        settings = bot.get_guild_settings(guild_id)
+        settings = bot.get_user_settings(user_id)
 
-        self.add_item(VoiceSelectView(bot, guild_id, settings.get('voice_name', 'tc_5c547544fcfee90007fed455')))
-        self.add_item(TempoSelectView(bot, guild_id, settings.get('tempo', 1.0)))
-        self.add_item(PitchSelectView(bot, guild_id, settings.get('pitch', 0)))
-        self.add_item(EmotionSelectView(bot, guild_id, settings.get('emotion_preset', 'normal')))
-        self.add_item(IntensitySelectView(bot, guild_id, settings.get('emotion_intensity', 1.0)))
+        self.add_item(VoiceSelectView(bot, user_id, settings.get('voice_name', 'tc_5c547544fcfee90007fed455')))
+        self.add_item(TempoSelectView(bot, user_id, settings.get('tempo', 1.0)))
+        self.add_item(PitchSelectView(bot, user_id, settings.get('pitch', 0)))
+        self.add_item(EmotionSelectView(bot, user_id, settings.get('emotion_preset', 'normal')))
+        self.add_item(IntensitySelectView(bot, user_id, settings.get('emotion_intensity', 1.0)))
 
 
 class TTSBot(discord.Client):
@@ -247,21 +247,28 @@ class TTSBot(discord.Client):
         super().__init__(intents=intents)
         self.tree = app_commands.CommandTree(self)
         self.guild_settings = {}
+        self.user_settings = {}
 
     def get_guild_settings(self, guild_id):
         if guild_id not in self.guild_settings:
             self.guild_settings[guild_id] = {
-                'voice_name': 'tc_5c547544fcfee90007fed455',
-                'tempo': 1.0,
-                'pitch': 0,
-                'emotion_preset': 'normal',
-                'emotion_intensity': 1.0,
                 'read_non_vc': False,
                 'channel_id': None,
                 'original_channel_name': None,
                 'temp_channel_id': None
             }
         return self.guild_settings[guild_id]
+
+    def get_user_settings(self, user_id):
+        if user_id not in self.user_settings:
+            self.user_settings[user_id] = {
+                'voice_name': 'tc_5c547544fcfee90007fed455',
+                'tempo': 1.0,
+                'pitch': 0,
+                'emotion_preset': 'normal',
+                'emotion_intensity': 1.0,
+            }
+        return self.user_settings[user_id]
 
     async def setup_hook(self):
         await self.tree.sync()
@@ -299,7 +306,8 @@ async def on_voice_state_update(member, before, after):
     if member.bot:
         return
 
-    settings = bot.get_guild_settings(member.guild.id)
+    guild_settings = bot.get_guild_settings(member.guild.id)
+    user_settings = bot.get_user_settings(member.id) # 해당 입퇴장 유저의 개인 설정 가져오기
     vc = member.guild.voice_client
     display_name_korean = convert_numbers_to_korean(auto_roman_to_korean(member.display_name))
 
@@ -309,7 +317,7 @@ async def on_voice_state_update(member, before, after):
             filename = f"tts_join_{member.id}_{int(time.time())}.wav"
 
             try:
-                audio_content = await asyncio.to_thread(generate_typecast_tts, tts_text, settings)
+                audio_content = await asyncio.to_thread(generate_typecast_tts, tts_text, user_settings)
                 with open(filename, "wb") as out:
                     out.write(audio_content)
 
@@ -326,7 +334,7 @@ async def on_voice_state_update(member, before, after):
             filename = f"tts_leave_{member.id}_{int(time.time())}.wav"
 
             try:
-                audio_content = await asyncio.to_thread(generate_typecast_tts, tts_text, settings)
+                audio_content = await asyncio.to_thread(generate_typecast_tts, tts_text, user_settings)
                 with open(filename, "wb") as out:
                     out.write(audio_content)
 
@@ -343,7 +351,7 @@ async def on_voice_state_update(member, before, after):
     human_members = [m for m in vc.channel.members if not m.bot]
     if len(human_members) == 0:
         await vc.disconnect()
-        settings['temp_channel_id'] = None
+        guild_settings['temp_channel_id'] = None
         print(f"⚠ {member.guild.name} 서버 음성 채널에 아무도 없어서 자동 퇴장했습니다.")
 
 async def remove_file_safely(filepath):
@@ -453,10 +461,10 @@ async def set_tts_channel(interaction: discord.Interaction, action: str):
 
         await interaction.followup.send("✅ TTS 채널 설정이 해제되었습니다.", ephemeral=True)
 
-@bot.tree.command(name="tts설정", description="TTS 목소리, 속도, 피치, 감정 및 강도를 설정합니다.")
+@bot.tree.command(name="tts설정", description="내 개인 TTS 목소리, 속도, 피치, 감정 및 강도를 설정합니다.")
 async def config_tts(interaction: discord.Interaction):
-    view = TTSSettingsView(bot, interaction.guild_id)
-    await interaction.response.send_message("🎙 **TTS 음성 옵션 설정**", view=view, ephemeral=True)
+    view = TTSSettingsView(bot, interaction.user.id)
+    await interaction.response.send_message("🎙 **개인 TTS 음성 옵션 설정**", view=view, ephemeral=True)
 
 
 # --- 메시지 감지 영역 ---
@@ -466,8 +474,9 @@ async def on_message(message):
     if message.guild is None or (message.author.bot and message.webhook_id is None):
         return
 
-    settings = bot.get_guild_settings(message.guild.id)
-    target_channel_id = settings.get('channel_id') or settings.get('temp_channel_id')
+    guild_settings = bot.get_guild_settings(message.guild.id)
+    user_settings = bot.get_user_settings(message.author.id) # 메시지 작성자의 개인 설정 가져오기
+    target_channel_id = guild_settings.get('channel_id') or guild_settings.get('temp_channel_id')
 
     author_name = convert_numbers_to_korean(auto_roman_to_korean(message.author.display_name))
 
@@ -500,12 +509,12 @@ async def on_message(message):
 
             if message.channel.id == target_channel_id:
                 voice_client = message.guild.voice_client
-                if voice_client and (message.author.voice and message.author.voice.channel == voice_client.channel or settings.get('read_non_vc')):
+                if voice_client and (message.author.voice and message.author.voice.channel == voice_client.channel or guild_settings.get('read_non_vc')):
                     tts_text = f"{author_name}님이 이모지를 보냈습니다."
                     filename = f"tts_emoji_{message.id}.wav"
 
                     try:
-                        audio_content = await asyncio.to_thread(generate_typecast_tts, tts_text, settings)
+                        audio_content = await asyncio.to_thread(generate_typecast_tts, tts_text, user_settings)
                         with open(filename, "wb") as out:
                             out.write(audio_content)
 
@@ -532,7 +541,7 @@ async def on_message(message):
             return
 
     author_in_vc = message.author.voice and message.author.voice.channel == voice_client.channel
-    if not author_in_vc and not settings.get('read_non_vc'): 
+    if not author_in_vc and not guild_settings.get('read_non_vc'): 
         return
 
     raw_text = message.content.strip()
@@ -586,7 +595,7 @@ async def on_message(message):
 
     filename = f"tts_{message.id}.wav"
     try:
-        audio_content = await asyncio.to_thread(generate_typecast_tts, tts_text, settings)
+        audio_content = await asyncio.to_thread(generate_typecast_tts, tts_text, user_settings)
         with open(filename, "wb") as out:
             out.write(audio_content)
     except Exception as e:
