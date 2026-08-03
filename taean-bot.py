@@ -1,4 +1,6 @@
 import sys, subprocess, os, site, json, re, asyncio, time, discord
+import aiohttp
+import io
 from discord import app_commands
 from dotenv import load_dotenv
 from typecast import Typecast
@@ -603,29 +605,33 @@ async def on_message(message):
             except discord.Forbidden:
                 pass
 
-            # 2. 메시지 본문에서 이모지 태그(<:name:id>)를 완전히 제거하여 pure 텍스트만 추출
+            # 2. 메시지 본문에서 이모지 태그(<:name:id>) 제거하여 pure 텍스트만 남기기
             cleaned_content = re.sub(r"<(a?):(\w+):(\d+)>", "", message.content).strip()
 
-            # 3. 첫 번째 이모지 URL 생성
+            # 3. 첫 번째 이모지 이미지 다운로드 (파일로 전송하기 위함)
             is_animated, emoji_name, emoji_id = custom_emojis[0]
             ext = "gif" if is_animated else "png"
             emoji_url = f"https://cdn.discordapp.com/emojis/{emoji_id}.{ext}?size=1024"
 
-            # 4. 이모티콘을 큰 이미지로 나타낼 임베드 구성
-            embed = discord.Embed(color=discord.Color.blurple())
-            embed.set_image(url=emoji_url)
+            async with aiohttp.ClientSession() as session:
+                async with session.get(emoji_url) as resp:
+                    if resp.status == 200:
+                        emoji_bytes = await resp.read()
+                        file = discord.File(io.BytesIO(emoji_bytes), filename=f"emoji.{ext}")
+                    else:
+                        file = None
 
-            # 5. 웹훅 전송 (텍스트가 포함된 경우 content에 추가)
+            # 4. 웹훅으로 파일(이미지) 및 텍스트 전송
             webhook = await message.channel.create_webhook(name="EmojiTransmitter")
             await webhook.send(
                 content=cleaned_content if cleaned_content else None,
-                embed=embed,
+                file=file,
                 username=message.author.display_name,
                 avatar_url=message.author.display_avatar.url
             )
             await webhook.delete()
 
-            # 6. 이모지 전송 후 TTS 음성 읽기
+            # 5. 이모지 전송 후 TTS 음성 읽기
             if message.channel.id == target_channel_id:
                 voice_client = message.guild.voice_client
                 if voice_client and (message.author.voice and message.author.voice.channel == voice_client.channel or guild_settings.get('read_non_vc')):
