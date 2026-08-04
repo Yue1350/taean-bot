@@ -79,7 +79,7 @@ async def remove_file_safely(filepath):
         try:
             os.remove(filepath)
 
-async def delete_message_after_delay(message, delay=10):
+async def delete_message_after_delay(message, delay=600):
     await asyncio.sleep(delay)
     try:
         await message.delete()
