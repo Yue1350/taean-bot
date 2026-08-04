@@ -48,8 +48,6 @@ class MyBot(discord.Client):
             try:
                 await self.load_extension(ext)
 
-        await self.tree.sync()
-
 bot = MyBot()
 
 @bot.event
