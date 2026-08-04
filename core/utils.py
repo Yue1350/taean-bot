@@ -1,9 +1,11 @@
-import io, os, re, asyncio, discord
+import io, os, re, json, asyncio, discord
 from typecast import Typecast
 from num2words import num2words
-from initial_config import INITIAL_REPLACEMENTS
 from korean_romanizer.romanizer import Romanizer
 from typecast.models import TTSRequest, Output, PresetPrompt
+
+with open('config/initial_config.json', 'r', encoding='utf-8') as f:
+    INITIAL_REPLACEMENTS = json.load(f)
 
 client = Typecast()
 
