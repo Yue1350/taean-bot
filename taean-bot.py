@@ -56,6 +56,5 @@ bot = MyBot()
 async def on_ready():
     activity = discord.Game(name="태안 촌놈들 관리 중")
     await bot.change_presence(status=discord.Status.online, activity=activity)
-    print(f"🤖 {bot.user.name} 로그인 완료!", flush=True)
 
 bot.run(os.getenv("DISCORD_TOKEN"))
