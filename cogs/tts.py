@@ -9,7 +9,7 @@ from core.utils import (
     delete_message_after_delay,
     INITIAL_REPLACEMENTS
 )
-from views import TTSSettingsView
+from core.views import TTSSettingsView
 
 class TTSCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
