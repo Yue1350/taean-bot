@@ -1,18 +1,18 @@
 import os, discord, asyncio
 from dotenv import load_dotenv
-from discord.ext import commands
 from keep_alive import keep_alive
 
 load_dotenv()
 keep_alive()
 
-class MyBot(commands.Bot):
+class MyBot(discord.Client):
     def __init__(self):
         intents = discord.Intents.default()
         intents.message_content = True
         intents.voice_states = True
-        
-        super().__init__(command_prefix="!", intents=intents)
+        super().__init__(intents=intents)
+
+        self.tree = discord.app_commands.CommandTree(self)
 
         self.guild_settings = {}
         self.user_settings = {}
@@ -50,13 +50,15 @@ class MyBot(commands.Bot):
             except Exception:
                 pass
 
-        await self.tree.sync()
-
 bot = MyBot()
 
 @bot.event
 async def on_ready():
     activity = discord.Game(name="태안 촌놈들 관리 중")
     await bot.change_presence(status=discord.Status.online, activity=activity)
+
+    for guild in bot.guilds:
+        bot.tree.copy_global_to(guild=guild)
+        await bot.tree.sync(guild=guild)
 
 bot.run(os.getenv("DISCORD_TOKEN"))
