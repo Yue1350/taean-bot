@@ -1,19 +1,11 @@
 import io, os, re, asyncio, discord
 from typecast import Typecast
 from num2words import num2words
+from initial_config import INITIAL_REPLACEMENTS
 from korean_romanizer.romanizer import Romanizer
 from typecast.models import TTSRequest, Output, PresetPrompt
 
 client = Typecast()
-
-INITIAL_REPLACEMENTS = {
-    "ㅎㅇ": "하이", "ㅂㅇ": "바이", "ㅂㅂ": "바바",
-    "ㄳ": "감사", "ㄱㅅ": "감사", "ㄷㄷ": "덜덜",
-    "ㅇㅈ": "인정", "ㄹㅇ": "레알", "ㅅㄱ": "수고",
-    "?": "응?", "ㅇ": "응", "ㅇㅇ": "응응",
-    "ㅅㅅ": "섹스", "ㅎㅎ": "히히", "ㄴㄴ": "노노",
-    "ㅈㄹ": "지랄", "ㅇㅋ": "오키", "ㄱㄱ": "고고"
-}
 
 def auto_roman_to_korean(text: str) -> str:
     text = text.replace("_", " ").replace("-", " ")
