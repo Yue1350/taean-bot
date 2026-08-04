@@ -349,7 +349,7 @@ class TTSCog(commands.Cog):
                 settings['temp_channel_id'] = None
                 await interaction.followup.send(f"🔊 {new_channel.mention} 채널이 TTS 채널로 지정되었습니다!", ephemeral=True)
             except discord.Forbidden:
-                await interaction.followup.send("⚠ 채널 관리 권한이 없어 채널을 생성하지 못했습니다.", ephemeral=True)
+                await interaction.followup.send("⚠ **채널 관리** 권한이 없어 채널을 생성하지 못했습니다.", ephemeral=True)
 
         elif action == "set":
             await interaction.response.defer(ephemeral=True)
@@ -360,7 +360,7 @@ class TTSCog(commands.Cog):
                 await interaction.channel.edit(name="𝗧𝗧𝗦", reason="TTS 채널 지정으로 인한 이름 변경")
                 await interaction.followup.send(f"🔊 {interaction.channel.mention} 채널이 TTS 채널로 지정되었습니다!", ephemeral=True)
             except discord.Forbidden:
-                await interaction.followup.send("⚠ 채널 관리 권한이 없어 채널 이름을 변경하지 못했습니다.", ephemeral=True)
+                await interaction.followup.send("⚠ **채널 관리** 권한이 없어 채널 이름을 변경하지 못했습니다.", ephemeral=True)
 
         elif action == "clear":
             await interaction.response.defer(ephemeral=True)
