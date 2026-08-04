@@ -1,15 +1,25 @@
 import os, re, time, asyncio, discord
 from discord import app_commands
 from discord.ext import commands
-from utils import (
-    generate_typecast_tts,
-    play_tts,
-    auto_roman_to_korean,
-    convert_numbers_to_korean,
-    delete_message_after_delay,
-    INITIAL_REPLACEMENTS
-)
-from views import TTSSettingsView
+
+# utils 및 views 모듈 안전 불러오기
+try:
+    from utils import (
+        generate_typecast_tts,
+        play_tts,
+        auto_roman_to_korean,
+        convert_numbers_to_korean,
+        delete_message_after_delay,
+        INITIAL_REPLACEMENTS
+    )
+except ImportError:
+    pass
+
+try:
+    from views import TTSSettingsView
+except ImportError:
+    TTSSettingsView = None
+
 
 class TTSCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
@@ -39,8 +49,8 @@ class TTSCog(commands.Cog):
                         await asyncio.sleep(0.3)
 
                     await play_tts(vc, filename, self.bot)
-                except Exception as e:
-                    print(f"Error generating join TTS: {e}")
+                except Exception:
+                    pass
 
         elif before.channel is not None and after.channel is None:
             if vc and before.channel == vc.channel:
@@ -56,8 +66,8 @@ class TTSCog(commands.Cog):
                         await asyncio.sleep(0.3)
 
                     await play_tts(vc, filename, self.bot)
-                except Exception as e:
-                    print(f"Error generating leave TTS: {e}")
+                except Exception:
+                    pass
 
         if not vc or not vc.is_connected():
             return
@@ -66,7 +76,6 @@ class TTSCog(commands.Cog):
         if len(human_members) == 0:
             await vc.disconnect()
             guild_settings['temp_channel_id'] = None
-            print(f"⚠ 음성 채널에 아무도 없어서 퇴장했습니다.")
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
@@ -158,8 +167,8 @@ class TTSCog(commands.Cog):
                 await asyncio.sleep(0.3)
 
             await play_tts(voice_client, filename, self.bot)
-        except Exception as e:
-            print(f"Error handling message TTS: {e}")
+        except Exception:
+            pass
 
     @app_commands.command(name="입장", description="봇을 음성 채널에 입장시킵니다.")
     async def join_vc(self, interaction: discord.Interaction):
@@ -240,8 +249,12 @@ class TTSCog(commands.Cog):
 
     @app_commands.command(name="tts설정", description="자신의 TTS 목소리, 속도, 피치, 감정 및 강도를 설정합니다.")
     async def config_tts(self, interaction: discord.Interaction):
+        if TTSSettingsView is None:
+            await interaction.response.send_message("⚠ 설정 뷰(views.py)를 불러올 수 없습니다.", ephemeral=True)
+            return
         view = TTSSettingsView(self.bot, interaction.user.id)
         await interaction.response.send_message("", view=view, ephemeral=True)
+
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(TTSCog(bot))
