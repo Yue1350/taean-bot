@@ -25,7 +25,7 @@ class EmojiCog(commands.Cog):
 
         if message.webhook_id is not None:
             if message.channel.id == target_channel_id:
-                asyncio.create_task(delete_message_after_delay(message, 10))
+                asyncio.create_task(delete_message_after_delay(message, 600))
             return
 
         custom_emojis = re.findall(r"<(a?):(\w+):(\d+)>", message.content)
