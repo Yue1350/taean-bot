@@ -12,11 +12,11 @@ from utils import (
 from views import TTSSettingsView
 
 class TTSCog(commands.Cog):
-    def __init__(self, bot):
+    def __init__(self, bot: commands.Bot):
         self.bot = bot
 
     @commands.Cog.listener()
-    async def on_voice_state_update(self, member, before, after):
+    async def on_voice_state_update(self, member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
         if member.bot:
             return
 
@@ -69,7 +69,7 @@ class TTSCog(commands.Cog):
             print(f"⚠ 음성 채널에 아무도 없어서 퇴장했습니다.")
 
     @commands.Cog.listener()
-    async def on_message(self, message):
+    async def on_message(self, message: discord.Message):
         if message.guild is None or (message.author.bot and message.webhook_id is None):
             return
 
@@ -164,7 +164,7 @@ class TTSCog(commands.Cog):
     @app_commands.command(name="입장", description="봇을 음성 채널에 입장시킵니다.")
     async def join_vc(self, interaction: discord.Interaction):
         if not interaction.user.voice or not interaction.user.voice.channel:
-            await interaction.response.send_message("⚠ 먼저 음성 채널에 입장해야 합니다.", ephemeral=True)
+            await interaction.response.send_message("⚠ 먼저 음성 채널에 입장하셔야 합니다.", ephemeral=True)
             return
 
         voice_channel = interaction.user.voice.channel
@@ -194,21 +194,22 @@ class TTSCog(commands.Cog):
 
     @app_commands.command(name="tts채널", description="TTS 전용 채널을 생성, 지정 또는 해제합니다.")
     @app_commands.rename(action="작업")
-    @app_commands.describe(action="수행할 작업을 선택하세요 (생성/지정/해제)")
+    @app_commands.describe(action="수행할 작업을 선택하십시오 (생성/지정/해제)")
     @app_commands.choices(action=[
         app_commands.Choice(name="생성", value="create"),
         app_commands.Choice(name="지정", value="set"),
         app_commands.Choice(name="해제", value="clear")
     ])
-    async def set_tts_channel(self, interaction: discord.Interaction, action: str):
+    async def set_tts_channel(self, interaction: discord.Interaction, action: app_commands.Choice[str]):
         permissions = interaction.channel.permissions_for(interaction.user)
         if not (permissions.manage_channels or permissions.administrator):
             await interaction.response.send_message("⚠ 관리자 권한이 필요합니다.", ephemeral=True)
             return
 
         settings = self.bot.get_guild_settings(interaction.guild_id)
+        act_value = action.value
 
-        if action == "create":
+        if act_value == "create":
             await interaction.response.defer(ephemeral=True)
             try:
                 new_channel = await interaction.guild.create_text_channel(
@@ -217,22 +218,22 @@ class TTSCog(commands.Cog):
                 )
                 settings['channel_id'] = new_channel.id
                 settings['temp_channel_id'] = None
-                await interaction.followup.send(f"🔊 {new_channel.mention} 채널이 TTS 채널로 지정되었습니다!", ephemeral=True)
+                await interaction.followup.send(f"🔊 {new_channel.mention} 채널이 TTS 채널로 지정되었습니다.", ephemeral=True)
             except discord.Forbidden:
                 await interaction.followup.send("⚠ **채널 관리** 권한이 없어 채널을 생성하지 못했습니다.", ephemeral=True)
 
-        elif action == "set":
+        elif act_value == "set":
             await interaction.response.defer(ephemeral=True)
             try:
                 settings['channel_id'] = interaction.channel_id
                 settings['temp_channel_id'] = None
 
                 await interaction.channel.edit(name="𝗧𝗧𝗦", reason="TTS 채널 지정으로 인한 이름 변경")
-                await interaction.followup.send(f"🔊 {interaction.channel.mention} 채널이 TTS 채널로 지정되었습니다!", ephemeral=True)
+                await interaction.followup.send(f"🔊 {interaction.channel.mention} 채널이 TTS 채널로 지정되었습니다.", ephemeral=True)
             except discord.Forbidden:
                 await interaction.followup.send("⚠ **채널 관리** 권한이 없어 채널 이름을 변경하지 못했습니다.", ephemeral=True)
 
-        elif action == "clear":
+        elif act_value == "clear":
             await interaction.response.defer(ephemeral=True)
             settings['channel_id'] = None
             await interaction.followup.send("✅ TTS 채널 설정이 해제되었습니다.", ephemeral=True)
@@ -242,5 +243,5 @@ class TTSCog(commands.Cog):
         view = TTSSettingsView(self.bot, interaction.user.id)
         await interaction.response.send_message("", view=view, ephemeral=True)
 
-async def setup(bot):
+async def setup(bot: commands.Bot):
     await bot.add_cog(TTSCog(bot))
