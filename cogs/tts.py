@@ -1,25 +1,15 @@
 import os, re, time, asyncio, discord
 from discord import app_commands
 from discord.ext import commands
-
-# utils 및 views 모듈 안전 불러오기
-try:
-    from utils import (
-        generate_typecast_tts,
-        play_tts,
-        auto_roman_to_korean,
-        convert_numbers_to_korean,
-        delete_message_after_delay,
-        INITIAL_REPLACEMENTS
-    )
-except ImportError:
-    pass
-
-try:
-    from views import TTSSettingsView
-except ImportError:
-    TTSSettingsView = None
-
+from utils import (
+    generate_typecast_tts,
+    play_tts,
+    auto_roman_to_korean,
+    convert_numbers_to_korean,
+    delete_message_after_delay,
+    INITIAL_REPLACEMENTS
+)
+from views import TTSSettingsView
 
 class TTSCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
