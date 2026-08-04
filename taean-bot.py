@@ -2,11 +2,9 @@ import os, discord, asyncio
 from dotenv import load_dotenv
 from keep_alive import keep_alive
 
-# 1. 환경 변수 및 24시간 서버 유지 설정
 load_dotenv()
 keep_alive()
 
-# 2. 디스코드 커스텀 봇 클래스 정의
 class MyBot(discord.Client):
     def __init__(self):
         intents = discord.Intents.default()
@@ -52,7 +50,6 @@ class MyBot(discord.Client):
 
         await self.tree.sync()
 
-# 3. 봇 인스턴스 생성 및 이벤트 핸들러
 bot = MyBot()
 
 @bot.event
@@ -62,5 +59,4 @@ async def on_ready():
     
     print(f"✅ 봇이 정상적으로 로그인 되었습니다.")
 
-# 4. 봇 실행
 bot.run(os.getenv("DISCORD_TOKEN"))
