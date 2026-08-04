@@ -1,6 +1,6 @@
 import io, re, asyncio, aiohttp, discord
 from discord.ext import commands
-from utils import (
+from core.utils import (
     generate_typecast_tts,
     play_tts,
     auto_roman_to_korean,
