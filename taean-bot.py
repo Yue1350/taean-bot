@@ -47,6 +47,10 @@ class MyBot(discord.Client):
         for ext in initial_extensions:
             try:
                 await self.load_extension(ext)
+            except Exception as e:
+                print(f"Extension load failed for {ext}: {e}")
+
+        await self.tree.sync()
 
 bot = MyBot()
 
