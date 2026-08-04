@@ -47,8 +47,10 @@ class MyBot(commands.Bot):
         for ext in initial_extensions:
             try:
                 await self.load_extension(ext)
+            except Exception:
+                pass
 
-        synced = await self.tree.sync()
+        await self.tree.sync()
 
 bot = MyBot()
 
