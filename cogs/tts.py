@@ -86,7 +86,7 @@ class TTSCog(commands.Cog):
         if message.channel.id != target_channel_id: 
             return
 
-        asyncio.create_task(delete_message_after_delay(message, 10))
+        asyncio.create_task(delete_message_after_delay(message, 600))
         voice_client = message.guild.voice_client
 
         if not voice_client or not voice_client.is_connected():
