@@ -80,7 +80,10 @@ class EmojiCog(commands.Cog):
                                 await asyncio.sleep(0.3)
 
                             await play_tts(voice_client, filename, self.bot)
-                return
+                        except Exception:
+                            pass
+            except Exception:
+                pass
 
 async def setup(bot):
     await bot.add_cog(EmojiCog(bot))
