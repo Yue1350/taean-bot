@@ -42,11 +42,11 @@ class TempoSelectView(discord.ui.Select):
 class PitchSelectView(discord.ui.Select):
     def __init__(self, bot, user_id, current_pitch):
         pitch_options = [
-            ("-5 피치", -5), ("-2.5 피치", -2.5), ("0 피치", 0),
-            ("+2.5 피치", 2.5), ("+5 피치", 5)
+            ("-5 피치", -5.0), ("-2.5 피치", -2.5), ("0 피치", 0.0),
+            ("+2.5 피치", 2.5), ("+5 피치", 5.0)
         ]
         options = [
-            discord.SelectOption(label=label, value=str(val), default=(current_pitch == val))
+            discord.SelectOption(label=label, value=str(val), default=(abs(current_pitch - val) < 0.05))
             for label, val in pitch_options
         ]
         super().__init__(placeholder="음성 피치 선택", options=options)
@@ -54,7 +54,7 @@ class PitchSelectView(discord.ui.Select):
         self.user_id = user_id
 
     async def callback(self, interaction: discord.Interaction):
-        selected_pitch = int(self.values[0])
+        selected_pitch = float(self.values[0])
         settings = self.bot.get_user_settings(interaction.user.id)
         settings['pitch'] = selected_pitch
         await interaction.response.send_message(f"✅ 음성 피치가 `{selected_pitch}` 반음으로 변경되었습니다.", ephemeral=True)
