@@ -1,18 +1,18 @@
 import os, discord, asyncio
 from dotenv import load_dotenv
+from discord.ext import commands
 from keep_alive import keep_alive
 
 load_dotenv()
 keep_alive()
 
-class MyBot(discord.Client):
+class MyBot(commands.Bot):
     def __init__(self):
         intents = discord.Intents.default()
         intents.message_content = True
         intents.voice_states = True
-        super().__init__(intents=intents)
-
-        self.tree = discord.app_commands.CommandTree(self)
+        
+        super().__init__(command_prefix="!", intents=intents)
 
         self.guild_settings = {}
         self.user_settings = {}
@@ -47,9 +47,12 @@ class MyBot(discord.Client):
         for ext in initial_extensions:
             try:
                 await self.load_extension(ext)
-                print(f"✅ Extention loaded: {ext}")
+                print(f"✅ Extension 로드 성공: {ext}", flush=True)
             except Exception as e:
-                print(f"❌ Failed to load extension {ext}: {e}")
+                print(f"❌ Extension 로드 실패 ({ext}): {e}", flush=True)
+
+        synced = await self.tree.sync()
+        print(f"✅ 동기화된 슬래시 명령어 개수: {len(synced)}개", flush=True)
 
 bot = MyBot()
 
@@ -57,9 +60,6 @@ bot = MyBot()
 async def on_ready():
     activity = discord.Game(name="태안 촌놈들 관리 중")
     await bot.change_presence(status=discord.Status.online, activity=activity)
-
-    for guild in bot.guilds:
-        bot.tree.copy_global_to(guild=guild)
-        await bot.tree.sync(guild=guild)
+    print(f"🤖 {bot.user.name} 로그인 완료!", flush=True)
 
 bot.run(os.getenv("DISCORD_TOKEN"))
