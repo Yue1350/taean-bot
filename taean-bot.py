@@ -60,7 +60,7 @@ async def on_ready():
     activity = discord.Game(name="태안 촌놈들 관리 중")
     await bot.change_presence(status=discord.Status.online, activity=activity)
     
-    print(f"✅ 봇이 정상적으로 작동할 준비가 되었습니다.")
+    print(f"✅ 봇이 정상적으로 로그인 되었습니다.")
 
 # 4. 봇 실행
 bot.run(os.getenv("DISCORD_TOKEN"))
