@@ -1,5 +1,8 @@
+import json
 import discord
-from voice_config import VOICE_OPTIONS
+
+with open('config/voice_config.json', 'r', encoding='utf-8') as f:
+    VOICE_OPTIONS = json.load(f)
 
 class VoiceSelectView(discord.ui.Select):
     def __init__(self, bot, user_id, current_voice):
