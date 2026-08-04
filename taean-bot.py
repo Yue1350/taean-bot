@@ -47,8 +47,9 @@ class MyBot(discord.Client):
         for ext in initial_extensions:
             try:
                 await self.load_extension(ext)
-            except Exception:
-                pass
+                print(f"✅ Extention loaded: {ext}")
+            except Exception as e:
+                print(f"❌ Failed to load extension {ext}: {e}")
 
 bot = MyBot()
 
