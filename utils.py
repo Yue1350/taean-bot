@@ -59,6 +59,8 @@ def generate_typecast_tts(text: str, settings: dict) -> bytes:
         ))
 
         return response.audio_data
+    except Exception:
+        return b""
 
 async def play_tts(vc, filename, bot):
     ffmpeg_executable = "./ffmpeg.exe" if os.path.exists("./ffmpeg.exe") else "ffmpeg"
@@ -72,12 +74,16 @@ async def play_tts(vc, filename, bot):
             asyncio.run_coroutine_threadsafe(remove_file_safely(filename), bot.loop)
 
         vc.play(audio_source, after=after_playing)
+    except Exception:
+        pass
 
 async def remove_file_safely(filepath):
     await asyncio.sleep(1)
     if os.path.exists(filepath):
         try:
             os.remove(filepath)
+        except Exception:
+            pass
 
 async def delete_message_after_delay(message, delay=600):
     await asyncio.sleep(delay)
