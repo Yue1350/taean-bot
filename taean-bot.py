@@ -1,6 +1,4 @@
-import sys, subprocess, os, site, json, re, asyncio, time, discord
-import aiohttp
-import io
+import io, aiohttp, sys, subprocess, os, site, json, re, asyncio, time, discord
 from discord import app_commands
 from dotenv import load_dotenv
 from typecast import Typecast
