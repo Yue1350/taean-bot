@@ -47,8 +47,13 @@ class MyBot(commands.Bot):
         for ext in initial_extensions:
             try:
                 await self.load_extension(ext)
-            except Exception:
-                pass
+                print(f"✅ Extension 로드 성공: {ext}", flush=True)
+            except Exception as e:
+                print(f"❌ Extension 로드 실패 ({ext}): {e}", flush=True)
+
+        # 디스코드 슬래시 명령어 강제 재동기화
+        synced = await self.tree.sync()
+        print(f"✅ 동기화된 슬래시 명령어 개수: {len(synced)}개", flush=True)
 
 bot = MyBot()
 
