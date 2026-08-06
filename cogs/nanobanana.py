@@ -14,13 +14,13 @@ class NanoBananaCog(commands.Cog):
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
-        # 일일 기본 한도 설정 (무료 플랜 기준 기본 100회로 설정, 필요시 수정 가능)
+        # 일일 기본 한도 설정
         self.daily_limit = 100
         self.used_today = 0
         self.last_reset_date = datetime.now().date()
 
     def _check_and_reset_daily_limit(self):
-        """날짜가 변경되면 사용량을 자동으로 초기화"""
+        """날짜가 바뀌면 사용량을 초기화"""
         current_date = datetime.now().date()
         if current_date != self.last_reset_date:
             self.used_today = 0
@@ -32,10 +32,10 @@ class NanoBananaCog(commands.Cog):
     async def generate_image(self, interaction: discord.Interaction, prompt: str):
         self._check_and_reset_daily_limit()
 
-        # 잔여 생성 개수 체크
+        # 봇 내부 로컬 카운트 검사
         if self.used_today >= self.daily_limit:
             await interaction.response.send_message(
-                "🚨 **오늘 사용할 수 있는 API 이미지 생성 한도를 모두 소진했어!**\n내일 다시 시도해 줘~",
+                "🚨 **오늘 봇에 설정된 일일 사용 횟수(100회)를 모두 사용했어!**\n내일 자정 이후에 다시 시도해 줘~",
                 ephemeral=True
             )
             return
@@ -44,7 +44,7 @@ class NanoBananaCog(commands.Cog):
 
         api_key = getattr(self.bot, "gemini_api_key", None)
         if not api_key:
-            await interaction.followup.send("❌ Gemini API 키가 설정되지 않았어. .env 파일을 확인해 줘!")
+            await interaction.followup.send("❌ Gemini API 키가 설정되지 않았어. .env 파일이나 main.py를 확인해 줘!")
             return
 
         api_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent?key={api_key}"
@@ -66,9 +66,12 @@ class NanoBananaCog(commands.Cog):
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.post(api_url, json=payload, headers=headers) as response:
+                    # API 자체 한도(429)에 걸린 경우
                     if response.status == 429:
-                        self.used_today = self.daily_limit  # 429 수신 시 오늘 한도 만료 처리
-                        await interaction.followup.send("🚨 **오늘 사용할 수 있는 API 이미지 생성 한도를 모두 소진했어!**\n내일 다시 시도해 줘~")
+                        await interaction.followup.send(
+                            "🚨 **Google API 요청 제한(429)이 발생했어!**\n"
+                            "분당 요청 수가 너무 많거나 오늘 API 전체 사용량이 초과되었을 수 있어. 잠시(1~2분) 후 다시 시도해 봐~"
+                        )
                         return
                     elif response.status != 200:
                         error_text = await response.text()
@@ -95,7 +98,7 @@ class NanoBananaCog(commands.Cog):
                         await interaction.followup.send("❌ 이미지 데이터를 찾을 수 없어.")
                         return
 
-                    # 성공 시 사용량 1 증가
+                    # 정상 발급 시에만 카운트 올리기
                     self.used_today += 1
                     remaining = max(0, self.daily_limit - self.used_today)
 
