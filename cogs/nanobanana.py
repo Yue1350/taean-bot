@@ -2,11 +2,15 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 import io
+import os
 import asyncio
 import logging
 from datetime import datetime
 from google import genai
 from google.genai import types
+
+api_key = os.getenv('GEMINI_API_KEY')
+client = genai.Client(apy_key=api_key)
 
 logger = logging.getLogger(__name__)
 
