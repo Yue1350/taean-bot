@@ -11,7 +11,7 @@ from google.genai import types
 logger = logging.getLogger(__name__)
 
 class NanoBananaCog(commands.Cog):
-    """Google GenAI SDK(Nano Banana / gemini-2.5-flash-image)를 이용한 이미지 생성 및 크레딧 관리 Cog"""
+    """Google GenAI SDK (Imagen 3)를 이용한 이미지 생성 및 크레딧 관리 Cog"""
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
@@ -35,7 +35,7 @@ class NanoBananaCog(commands.Cog):
                 self.client = genai.Client(api_key=api_key)
         return self.client
 
-    @app_commands.command(name="생성", description="나노 바나나 API로 이미지를 생성합니다.")
+    @app_commands.command(name="생성", description="나노 바나나(Imagen 3) API로 이미지를 생성합니다.")
     @app_commands.describe(prompt="생성하고 싶은 이미지의 설명을 입력하세요.")
     @app_commands.checks.cooldown(1, 30.0, key=lambda i: i.user.id)
     async def generate_image(self, interaction: discord.Interaction, prompt: str):
@@ -52,34 +52,30 @@ class NanoBananaCog(commands.Cog):
 
         client = self._get_client()
         if not client:
-            await interaction.followup.send("❌ Gemini API 키가 설정되지 않았어. bot.gemini_api_key 설정을 확인해 줘!")
+            await interaction.followup.send("❌ Gemini API 키가 설정되지 않았어. .env 또는 main.py 설정을 확인해 줘!")
             return
 
         try:
-            # 공식 문서 기준: gemini-2.5-flash-image 모델 및 response_modalities=["IMAGE"] 설정
+            # Imagen 3 이미지 생성 메서드 동기 실행 (asyncio.to_thread 사용)
             def call_api():
-                return client.models.generate_content(
-                    model="gemini-2.5-flash-image",
-                    contents=prompt,
-                    config=types.GenerateContentConfig(
-                        response_modalities=["IMAGE"]
+                return client.models.generate_images(
+                    model='imagen-3.0-generate-002',
+                    prompt=prompt,
+                    config=types.GenerateImagesConfig(
+                        number_of_images=1,
+                        aspect_ratio="1:1",
+                        output_mime_type="image/png"
                     )
                 )
 
-            # SDK 동기 요청을 비동기 타스크로 실행하여 Discord Bot 블로킹 방지
             response = await asyncio.to_thread(call_api)
 
-            # 응답에서 이미지 바이너리 추출
-            image_bytes = None
-            if response.candidates and response.candidates[0].content.parts:
-                for part in response.candidates[0].content.parts:
-                    if hasattr(part, "inline_data") and part.inline_data:
-                        image_bytes = part.inline_data.data
-                        break
-
-            if not image_bytes:
+            if not response or not response.generated_images:
                 await interaction.followup.send("❌ 이미지를 생성하지 못했거나 응답 결과가 없어.")
                 return
+
+            # 생성된 이미지 바이너리 추출
+            image_bytes = response.generated_images[0].image.image_bytes
 
             self.used_today += 1
             remaining = max(0, self.daily_limit - self.used_today)
@@ -106,7 +102,7 @@ class NanoBananaCog(commands.Cog):
             if "429" in error_str or "RESOURCE_EXHAUSTED" in error_str:
                 await interaction.followup.send(
                     "🚨 **Google API 요청 제한(429/Resource Exhausted)이 발생했어!**\n"
-                    "분당 요청 제한(RPM)에 걸렸거나 API Key의 사용량이 초과되었을 수 있어. 잠시 후 다시 시도해 줘~"
+                    "분당 요청 제한(RPM)에 걸렸거나 API 사용량이 일시적으로 초과되었을 수 있어. 약 1분 뒤에 다시 시도해 줘~"
                 )
             else:
                 await interaction.followup.send(f"❌ 오류가 발생했습니다: {error_str}")
