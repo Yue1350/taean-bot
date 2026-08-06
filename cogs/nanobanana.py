@@ -23,7 +23,7 @@ class NanoBanana(commands.Cog):
         try:
             # Nano Banana (Gemini 2.5 Flash Image) 모델 호출
             response = self.gemini_client.models.generate_content(
-                model='gemini-2.5-flash-image',
+                model='gemini-3.1-flash-lite-image',
                 contents=prompt,
                 config=types.GenerateContentConfig(
                     response_modalities=["IMAGE"]
