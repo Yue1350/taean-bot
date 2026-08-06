@@ -1,5 +1,6 @@
 import io, re, asyncio, aiohttp, discord
 from discord.ext import commands
+from PIL import Image, ImageSequence
 from core.utils import (
     generate_typecast_tts,
     play_tts,
@@ -7,6 +8,58 @@ from core.utils import (
     convert_numbers_to_korean,
     delete_message_after_delay
 )
+
+def resize_image_to_square(img_bytes: bytes, target_size: int = 512) -> bytes:
+    """
+    이미지(PNG/GIF)를 비율을 유지하며 target_size x target_size 투명 캔버스 중앙에 배치해 업스케일링합니다.
+    """
+    with Image.open(io.BytesIO(img_bytes)) as img:
+        is_animated = getattr(img, "is_animated", False)
+        
+        def process_frame(frame):
+            # 투명 배경의 512x512 캔버스 생성
+            canvas = Image.new("RGBA", (target_size, target_size), (0, 0, 0, 0))
+            frame_rgba = frame.convert("RGBA")
+            
+            # 비율 유지 리사이징 계산
+            w, h = frame_rgba.size
+            ratio = min(target_size / w, target_size / h)
+            new_w, new_h = max(1, int(w * ratio)), max(1, int(h * ratio))
+            
+            resized_frame = frame_rgba.resize((new_w, new_h), Image.Resampling.LANCZOS)
+            
+            # 중앙 배치 위치 계산
+            paste_x = (target_size - new_w) // 2
+            paste_y = (target_size - new_h) // 2
+            
+            canvas.paste(resized_frame, (paste_x, paste_y), resized_frame)
+            return canvas
+
+        output = io.BytesIO()
+
+        if is_animated:
+            frames = []
+            durations = []
+            for frame in ImageSequence.Iterator(img):
+                frames.append(process_frame(frame))
+                durations.append(frame.info.get('duration', 100))
+            
+            frames[0].save(
+                output,
+                format='GIF',
+                save_all=True,
+                append_images=frames[1:],
+                loop=img.info.get('loop', 0),
+                duration=durations,
+                disposal=2,
+                transparency=0
+            )
+        else:
+            processed = process_frame(img)
+            processed.save(output, format='PNG')
+
+        return output.getvalue()
+
 
 class EmojiCog(commands.Cog):
     def __init__(self, bot):
@@ -46,7 +99,9 @@ class EmojiCog(commands.Cog):
                     async with session.get(emoji_url) as resp:
                         if resp.status == 200:
                             emoji_bytes = await resp.read()
-                            file = discord.File(io.BytesIO(emoji_bytes), filename=f"emoji.{ext}")
+                            # Pillow 처리는 동기 작업이므로 asyncio.to_thread로 실행하여 블로킹 방지
+                            processed_bytes = await asyncio.to_thread(resize_image_to_square, emoji_bytes, 512)
+                            file = discord.File(io.BytesIO(processed_bytes), filename=f"emoji.{ext}")
                         else:
                             file = None
 
