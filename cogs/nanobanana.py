@@ -9,9 +9,6 @@ from datetime import datetime
 from google import genai
 from google.genai import types
 
-api_key = os.getenv('GEMINI_API_KEY')
-client = genai.Client(apy_key=api_key)
-
 logger = logging.getLogger(__name__)
 
 class NanoBananaCog(commands.Cog):
@@ -34,11 +31,11 @@ class NanoBananaCog(commands.Cog):
     def _get_client(self):
         """GenAI Client 생성 또는 반환"""
         if self.client is None:
-            api_key = getattr(self.bot, "gemini_api_key", None)
+            api_key = getattr(self.bot, "gemini_api_key", os.getenv("GEMINI_API_KEY"))
             if api_key:
                 self.client = genai.Client(api_key=api_key)
             else:
-                self.client = genai.Client() # 환경 변수 GEMINI_API_KEY 기본 참조
+                self.client = genai.Client()  # 기본 환경변수 GEMINI_API_KEY 참조
         return self.client
 
     @app_commands.command(name="생성", description="Imagen 3 API로 이미지를 생성합니다.")
@@ -59,7 +56,6 @@ class NanoBananaCog(commands.Cog):
         client = self._get_client()
 
         try:
-            # 공식 Imagen 3 API 호출 방식 적용
             def call_api():
                 return client.models.generate_images(
                     model="imagen-3.0-generate-002",
@@ -73,7 +69,6 @@ class NanoBananaCog(commands.Cog):
 
             res = await asyncio.to_thread(call_api)
 
-            # 응답 데이터 검증 및 이미지 바이트 추출
             if not res or not hasattr(res, "generated_images") or not res.generated_images:
                 await interaction.followup.send("❌ 이미지를 생성하지 못했거나 응답 결과가 없어.")
                 return
