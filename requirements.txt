@@ -3,6 +3,7 @@ davey
 PyNaCl
 Pillow
 requests
+streamlit
 discord.py
 num2words
 google-genai
