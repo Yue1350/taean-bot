@@ -5,19 +5,41 @@ import aiohttp
 import io
 import base64
 import logging
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
 class NanoBananaCog(commands.Cog):
-    """나노 바나나(Gemini Flash Image) API를 이용한 이미지 생성 Cog"""
+    """나노 바나나 API를 이용한 이미지 생성 및 크레딧 관리 Cog"""
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
+        # 일일 기본 한도 설정 (무료 플랜 기준 기본 100회로 설정, 필요시 수정 가능)
+        self.daily_limit = 100
+        self.used_today = 0
+        self.last_reset_date = datetime.now().date()
+
+    def _check_and_reset_daily_limit(self):
+        """날짜가 변경되면 사용량을 자동으로 초기화"""
+        current_date = datetime.now().date()
+        if current_date != self.last_reset_date:
+            self.used_today = 0
+            self.last_reset_date = current_date
 
     @app_commands.command(name="생성", description="나노 바나나 API로 이미지를 생성합니다.")
     @app_commands.describe(prompt="생성하고 싶은 이미지의 설명을 입력하세요.")
     @app_commands.checks.cooldown(1, 30.0, key=lambda i: i.user.id)
     async def generate_image(self, interaction: discord.Interaction, prompt: str):
+        self._check_and_reset_daily_limit()
+
+        # 잔여 생성 개수 체크
+        if self.used_today >= self.daily_limit:
+            await interaction.response.send_message(
+                "🚨 **오늘 사용할 수 있는 API 이미지 생성 한도를 모두 소진했어!**\n내일 다시 시도해 줘~",
+                ephemeral=True
+            )
+            return
+
         await interaction.response.defer(thinking=True)
 
         api_key = getattr(self.bot, "gemini_api_key", None)
@@ -25,7 +47,6 @@ class NanoBananaCog(commands.Cog):
             await interaction.followup.send("❌ Gemini API 키가 설정되지 않았어. .env 파일을 확인해 줘!")
             return
 
-        # 나노 바나나 (Gemini 2.5 Flash Image) 표준 엔드포인트
         api_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent?key={api_key}"
 
         payload = {
@@ -46,7 +67,8 @@ class NanoBananaCog(commands.Cog):
             async with aiohttp.ClientSession() as session:
                 async with session.post(api_url, json=payload, headers=headers) as response:
                     if response.status == 429:
-                        await interaction.followup.send("🚨 **오늘 사용할 수 있는 API 이미지 생성 한도를 모두 소진했어!**\n잠시 후 다시 시도해 줘~")
+                        self.used_today = self.daily_limit  # 429 수신 시 오늘 한도 만료 처리
+                        await interaction.followup.send("🚨 **오늘 사용할 수 있는 API 이미지 생성 한도를 모두 소진했어!**\n내일 다시 시도해 줘~")
                         return
                     elif response.status != 200:
                         error_text = await response.text()
@@ -56,7 +78,6 @@ class NanoBananaCog(commands.Cog):
 
                     data = await response.json()
 
-                    # Gemini multimodal 응답에서 이미지 데이터(inlineData) 추출
                     candidates = data.get("candidates", [])
                     if not candidates:
                         await interaction.followup.send("❌ 이미지를 생성하지 못했어. (응답 데이터 없음)")
@@ -74,6 +95,10 @@ class NanoBananaCog(commands.Cog):
                         await interaction.followup.send("❌ 이미지 데이터를 찾을 수 없어.")
                         return
 
+                    # 성공 시 사용량 1 증가
+                    self.used_today += 1
+                    remaining = max(0, self.daily_limit - self.used_today)
+
                     image_bytes = base64.b64decode(image_base64)
                     file = discord.File(fp=io.BytesIO(image_bytes), filename="generated_image.png")
                     
@@ -84,7 +109,7 @@ class NanoBananaCog(commands.Cog):
                     )
                     embed.set_image(url="attachment://generated_image.png")
                     embed.set_footer(
-                        text=f"요청자: {interaction.user.display_name}", 
+                        text=f"요청자: {interaction.user.display_name} | 오늘 남은 생성 횟수: {remaining}회", 
                         icon_url=interaction.user.display_avatar.url
                     )
 
@@ -93,6 +118,27 @@ class NanoBananaCog(commands.Cog):
         except Exception as e:
             logger.exception("이미지 생성 중 에러 발생")
             await interaction.followup.send(f"❌ 오류가 발생했습니다: {str(e)}")
+
+    @app_commands.command(name="크레딧", description="오늘 남은 나노 바나나 이미지 생성 크레딧 및 잔여 횟수를 확인합니다.")
+    async def check_credit(self, interaction: discord.Interaction):
+        self._check_and_reset_daily_limit()
+
+        remaining = max(0, self.daily_limit - self.used_today)
+        progress_bar_length = 10
+        filled = int((self.used_today / self.daily_limit) * progress_bar_length)
+        bar = "🟩" * (progress_bar_length - filled) + "🟥" * filled
+
+        embed = discord.Embed(
+            title="🍌 금일 나노 바나나 API 잔여 크레딧 현황",
+            color=discord.Color.from_rgb(255, 215, 0)
+        )
+        embed.add_field(name="총 일일 제공 횟수", value=f"`{self.daily_limit}회`", inline=True)
+        embed.add_field(name="오늘 사용한 횟수", value=f"`{self.used_today}회`", inline=True)
+        embed.add_field(name="남은 생성 횟수", value=f"`{remaining}회`", inline=True)
+        embed.add_field(name="사용률 현황", value=f"{bar} ({self.used_today}/{self.daily_limit})", inline=False)
+        embed.set_footer(text="매일 자정에 생성 한도가 자동으로 초기화돼~")
+
+        await interaction.response.send_message(embed=embed)
 
     @generate_image.error
     async def on_generate_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
