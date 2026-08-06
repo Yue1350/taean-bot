@@ -1,59 +1,44 @@
+import os
 import io
-import streamlit as st
+import discord
+from discord import app_commands
+from discord.ext import commands
 from google import genai
 from google.genai import types
 
-# 페이지 기본 설정
-st.set_page_config(page_title="나노 바나나 이미지 생성 봇", page_icon="🍌")
-st.title("🍌 나노 바나나 이미지 생성 봇")
+class NanoBanana(commands.Cog):
+    def __init__(self, bot):
+        self.bot = bot
+        # 환경 변수에서 GEMINI_API_KEY 불러오기
+        api_key = os.getenv("GEMINI_API_KEY")
+        if not api_key:
+            raise ValueError("GEMINI_API_KEY 환경 변수가 설정되지 않았어!")
+        
+        self.gemini_client = genai.Client(api_key=api_key)
 
-# 사이드바에서 Gemini API 키 입력 받기
-api_key = st.sidebar.text_input("Gemini API Key를 입력하세요", type="password")
+    @app_commands.command(name="나노바나나", description="프롬프트를 입력받아 Gemini/Imagen 모델로 이미지를 생성합니다.")
+    @app_commands.describe(prompt="만들고 싶은 이미지 설명을 입력하세요")
+    async def generate_image(self, interaction: discord.Interaction, prompt: str):
+        await interaction.response.defer()
 
-# 프롬프트 입력 창
-prompt = st.text_area("어떤 이미지를 만들고 싶어?", placeholder="예: 바나나 옷을 입은 귀여운 고양이, 픽사 스타일")
-
-# 이미지 비율 및 수량 옵션
-col1, col2 = st.columns(2)
-with col1:
-    aspect_ratio = st.selectbox("이미지 비율", ["1:1", "3:4", "4:3", "9:16", "16:9"])
-with col2:
-    output_format = st.selectbox("파일 형식", ["image/jpeg", "image/png"])
-
-# 이미지 생성 버튼
-if st.button("이미지 생성하기 🚀"):
-    if not api_key:
-        st.error("API 키를 먼저 입력해 줘!")
-    elif not prompt:
-        st.warning("프롬프트를 입력해 줘!")
-    else:
-        with st.spinner("멋진 이미지를 만들고 있어, 잠시만 기다려 줘..."):
-            try:
-                # Gemini SDK 클라이언트 설정
-                client = genai.Client(api_key=api_key)
-
-                # Imagen 모델 호출
-                response = client.models.generate_images(
-                    model='imagen-3.0-generate-002',
-                    prompt=prompt,
-                    config=types.GenerateImagesConfig(
-                        number_of_images=1,
-                        output_mime_type=output_format,
-                        aspect_ratio=aspect_ratio
-                    )
+        try:
+            response = self.gemini_client.models.generate_images(
+                model='imagen-3.0-generate-002',
+                prompt=prompt,
+                config=types.GenerateImagesConfig(
+                    number_of_images=1,
+                    output_mime_type="image/jpeg",
+                    aspect_ratio="1:1"
                 )
+            )
 
-                # 결과 출력
-                for generated_image in response.generated_images:
-                    image_bytes = generated_image.image.image_bytes
-                    st.image(image_bytes, caption=f"결과물: {prompt}", use_container_width=True)
-                    
-                    # 다운로드 버튼 제공
-                    st.download_button(
-                        label="이미지 다운로드 📥",
-                        data=image_bytes,
-                        file_name="nano_banana_image.png" if output_format == "image/png" else "nano_banana_image.jpg",
-                        mime=output_format
-                    )
-            except Exception as e:
-                st.error(f"이미지 생성 실패: {e}")
+            for generated_image in response.generated_images:
+                image_bytes = generated_image.image.image_bytes
+                file = discord.File(fp=io.BytesIO(image_bytes), filename="nanobanana.jpg")
+                await interaction.followup.send(content=f"🍌 **프롬프트:** {prompt}", file=file)
+
+        except Exception as e:
+            await interaction.followup.send(content=f"❌ 이미지 생성 중 오류가 발생했어: {e}")
+
+async def setup(bot):
+    await bot.add_cog(NanoBanana(bot))
