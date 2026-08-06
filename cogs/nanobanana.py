@@ -3,15 +3,15 @@ from discord import app_commands
 from discord.ext import commands
 import io
 import asyncio
+import base64
 import logging
 from datetime import datetime
 from google import genai
-from google.genai import types
 
 logger = logging.getLogger(__name__)
 
 class NanoBananaCog(commands.Cog):
-    """Google GenAI SDK (gemini-3.1-flash-lite-image)를 이용한 이미지 생성 및 크레딧 관리 Cog"""
+    """Google GenAI Interactions API (gemini-3.1-flash-image) 기반 이미지 생성 Cog"""
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
@@ -33,9 +33,11 @@ class NanoBananaCog(commands.Cog):
             api_key = getattr(self.bot, "gemini_api_key", None)
             if api_key:
                 self.client = genai.Client(api_key=api_key)
+            else:
+                self.client = genai.Client() # 환경 변수 GEMINI_API_KEY 기본 참조
         return self.client
 
-    @app_commands.command(name="생성", description="나노 바나나 API로 이미지를 생성합니다.")
+    @app_commands.command(name="생성", description="Gemini 3.1 Flash Image API로 이미지를 생성합니다.")
     @app_commands.describe(prompt="생성하고 싶은 이미지의 설명을 입력하세요.")
     @app_commands.checks.cooldown(1, 30.0, key=lambda i: i.user.id)
     async def generate_image(self, interaction: discord.Interaction, prompt: str):
@@ -51,34 +53,23 @@ class NanoBananaCog(commands.Cog):
         await interaction.response.defer(thinking=True)
 
         client = self._get_client()
-        if not client:
-            await interaction.followup.send("❌ Gemini API 키가 설정되지 않았어. .env 또는 main.py 설정을 확인해 줘!")
-            return
 
         try:
-            # gemini-3.1-flash-lite-image 모델 및 IMAGE 모달리티 설정
+            # 공식 Interactions API 호출 방식 적용 (gemini-3.1-flash-image)
             def call_api():
-                return client.models.generate_content(
-                    model="gemini-3.1-flash-lite-image",
-                    contents=prompt,
-                    config=types.GenerateContentConfig(
-                        response_modalities=["IMAGE"]
-                    )
+                return client.interactions.create(
+                    model="gemini-3.1-flash-image",
+                    input=prompt,
                 )
 
-            response = await asyncio.to_thread(call_api)
+            res = await asyncio.to_thread(call_api)
 
-            # 응답 파트에서 이미지 바이너리 extraction
-            image_bytes = None
-            if response and response.candidates and response.candidates[0].content.parts:
-                for part in response.candidates[0].content.parts:
-                    if hasattr(part, "inline_data") and part.inline_data:
-                        image_bytes = part.inline_data.data
-                        break
-
-            if not image_bytes:
+            # 응답 데이터에서 Base64 디코딩
+            if not hasattr(res, "output_image") or not res.output_image or not res.output_image.data:
                 await interaction.followup.send("❌ 이미지를 생성하지 못했거나 응답 결과가 없어.")
                 return
+
+            image_bytes = base64.b64decode(res.output_image.data)
 
             self.used_today += 1
             remaining = max(0, self.daily_limit - self.used_today)
