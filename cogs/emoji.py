@@ -11,13 +11,13 @@ from core.utils import (
 
 def resize_image_to_square(img_bytes: bytes, target_size: int = 128) -> bytes:
     """
-    이미지(PNG/GIF)를 비율을 유지하며 target_size x target_size 투명 캔버스 중앙에 배치해 업스케일링합니다.
+    이미지(PNG/GIF)를 비율을 유지하며 target_size x target_size 투명 캔버스 중앙에 배치해 업스케일링/다운스케일링합니다.
     """
     with Image.open(io.BytesIO(img_bytes)) as img:
         is_animated = getattr(img, "is_animated", False)
         
         def process_frame(frame):
-            # 투명 배경의 512x512 캔버스 생성
+            # 투명 배경의 128x128 캔버스 생성
             canvas = Image.new("RGBA", (target_size, target_size), (0, 0, 0, 0))
             frame_rgba = frame.convert("RGBA")
             
@@ -99,8 +99,8 @@ class EmojiCog(commands.Cog):
                     async with session.get(emoji_url) as resp:
                         if resp.status == 200:
                             emoji_bytes = await resp.read()
-                            # Pillow 처리는 동기 작업이므로 asyncio.to_thread로 실행하여 블로킹 방지
-                            processed_bytes = await asyncio.to_thread(resize_image_to_square, emoji_bytes, 512)
+                            # Pillow 처리는 동기 작업이므로 asyncio.to_thread로 실행하여 블로킹 방지 (128x128 로 변경)
+                            processed_bytes = await asyncio.to_thread(resize_image_to_square, emoji_bytes, 128)
                             file = discord.File(io.BytesIO(processed_bytes), filename=f"emoji.{ext}")
                         else:
                             file = None
