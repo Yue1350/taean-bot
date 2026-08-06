@@ -13,7 +13,7 @@ class NanoBanana(commands.Cog):
 
         self.gemini_client = genai.Client(api_key=api_key)
 
-        @app_commands.command(
+    @app_commands.command(
         name="나노바나나",
         description="Gemini Flash 모델을 사용해 이미지를 생성합니다.",
     )
