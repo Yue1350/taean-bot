@@ -9,7 +9,7 @@ from core.utils import (
     delete_message_after_delay
 )
 
-def resize_image_to_square(img_bytes: bytes, target_size: int = 512) -> bytes:
+def resize_image_to_square(img_bytes: bytes, target_size: int = 128) -> bytes:
     """
     이미지(PNG/GIF)를 비율을 유지하며 target_size x target_size 투명 캔버스 중앙에 배치해 업스케일링합니다.
     """
