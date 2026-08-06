@@ -9,3 +9,4 @@ google-genai
 python-dotenv
 typecast-python
 korean-romanizer
+python-telegram-bot
