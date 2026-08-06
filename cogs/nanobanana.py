@@ -9,7 +9,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 class NanoBananaCog(commands.Cog):
-    """나노 바나나 API를 이용한 이미지 생성 Cog"""
+    """나노 바나나(Gemini Flash Image) API를 이용한 이미지 생성 Cog"""
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
@@ -25,16 +25,17 @@ class NanoBananaCog(commands.Cog):
             await interaction.followup.send("❌ Gemini API 키가 설정되지 않았어. .env 파일을 확인해 줘!")
             return
 
-        # Gemini / Imagen 3 표준 API 엔드포인트
-        api_url = f"https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:generateImages?key={api_key}"
+        # 나노 바나나 (Gemini 2.5 Flash Image) 표준 엔드포인트
+        api_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent?key={api_key}"
 
         payload = {
-            "prompt": prompt,
-            "config": {
-                "numberOfImages": 1,
-                "outputMimeType": "image/png",
-                "aspectRatio": "1:1"
-            }
+            "contents": [
+                {
+                    "parts": [
+                        {"text": f"Generate an image: {prompt}"}
+                    ]
+                }
+            ]
         }
 
         headers = {
@@ -55,15 +56,25 @@ class NanoBananaCog(commands.Cog):
 
                     data = await response.json()
 
-                    # 응답 데이터 처리
-                    generated_images = data.get("generatedImages", [])
-                    if not generated_images:
+                    # Gemini multimodal 응답에서 이미지 데이터(inlineData) 추출
+                    candidates = data.get("candidates", [])
+                    if not candidates:
                         await interaction.followup.send("❌ 이미지를 생성하지 못했어. (응답 데이터 없음)")
                         return
 
-                    base64_data = generated_images[0]["image"]["imageBytes"]
-                    image_bytes = base64.b64decode(base64_data)
+                    parts = candidates[0].get("content", {}).get("parts", [])
+                    image_base64 = None
 
+                    for part in parts:
+                        if "inlineData" in part:
+                            image_base64 = part["inlineData"].get("data")
+                            break
+
+                    if not image_base64:
+                        await interaction.followup.send("❌ 이미지 데이터를 찾을 수 없어.")
+                        return
+
+                    image_bytes = base64.b64decode(image_base64)
                     file = discord.File(fp=io.BytesIO(image_bytes), filename="generated_image.png")
                     
                     embed = discord.Embed(
