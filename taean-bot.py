@@ -12,7 +12,7 @@ class MyBot(commands.Bot):
         intents.message_content = True
         intents.voice_states = True
         
-        super().__init__(command_prefix="!", intents=intents)
+        super().__init__(command_prefix="!", help_command=None, intents=intents)
 
         self.guild_settings = {}
         self.user_settings = {}
