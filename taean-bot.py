@@ -14,9 +14,6 @@ class MyBot(commands.Bot):
         
         super().__init__(command_prefix="!", help_command=None, intents=intents)
 
-        # .env 파일에서 Gemini API 키 로드
-        self.gemini_api_key = os.getenv("GEMINI_API_KEY")
-
         self.guild_settings = {}
         self.user_settings = {}
 
