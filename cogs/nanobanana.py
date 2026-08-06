@@ -12,7 +12,7 @@ from google.genai import types
 logger = logging.getLogger(__name__)
 
 class NanoBananaCog(commands.Cog):
-    """Google GenAI API (imagen-3.0-generate-002) 기반 이미지 생성 Cog"""
+    """Google GenAI API 기반 이미지 생성 Cog"""
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
@@ -38,7 +38,7 @@ class NanoBananaCog(commands.Cog):
                 self.client = genai.Client()  # 기본 환경변수 GEMINI_API_KEY 참조
         return self.client
 
-    @app_commands.command(name="생성", description="Imagen 3 API로 이미지를 생성합니다.")
+    @app_commands.command(name="생성", description="Imagen API로 이미지를 생성합니다.")
     @app_commands.describe(prompt="생성하고 싶은 이미지의 설명을 입력하세요.")
     @app_commands.checks.cooldown(1, 30.0, key=lambda i: i.user.id)
     async def generate_image(self, interaction: discord.Interaction, prompt: str):
@@ -57,8 +57,9 @@ class NanoBananaCog(commands.Cog):
 
         try:
             def call_api():
+                # 모델명을 imagen-3.0-generate-001 또는 imagen-4.0-generate-001로 지정
                 return client.models.generate_images(
-                    model="imagen-3.0-generate-002",
+                    model="imagen-3.0-generate-001",
                     prompt=prompt,
                     config=types.GenerateImagesConfig(
                         number_of_images=1,
