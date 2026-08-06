@@ -1,6 +1,7 @@
 flask
 davey
 PyNaCl
+Pillow
 requests
 discord.py
 num2words
