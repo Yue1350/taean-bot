@@ -14,6 +14,9 @@ class MyBot(commands.Bot):
         
         super().__init__(command_prefix="!", help_command=None, intents=intents)
 
+        # .env 파일에서 Gemini API 키 로드
+        self.gemini_api_key = os.getenv("GEMINI_API_KEY")
+
         self.guild_settings = {}
         self.user_settings = {}
 
@@ -41,19 +44,27 @@ class MyBot(commands.Bot):
         initial_extensions = [
             'cogs.tts',
             'cogs.emoji',
-            'cogs.meetup'
+            'cogs.meetup',
+            'cogs.nanobanana'  # NanoBanana Cog 추가
         ]
 
         for ext in initial_extensions:
             try:
                 await self.load_extension(ext)
-            except Exception:
-                pass
+            except Exception as e:
+                print(f"Failed to load extension {ext}: {e}")
 
 bot = MyBot()
 
 @bot.event
 async def on_ready():
+    # 슬래시 명령어를 디스코드 서버와 동기화
+    try:
+        synced = await bot.tree.sync()
+        print(f"Synced {len(synced)} command(s)")
+    except Exception as e:
+        print(f"Failed to sync commands: {e}")
+
     activity = discord.Game(name="태안 촌놈들 관리 중")
     await bot.change_presence(status=discord.Status.online, activity=activity)
 
