@@ -56,10 +56,10 @@ class NanoBananaCog(commands.Cog):
             return
 
         try:
-            # Imagen 3 이미지 생성 메서드 동기 실행 (asyncio.to_thread 사용)
+            # v1beta 호환 안정 모델: imagen-3.0-generate-001
             def call_api():
                 return client.models.generate_images(
-                    model='imagen-3.0-generate-002',
+                    model='imagen-3.0-generate-001',
                     prompt=prompt,
                     config=types.GenerateImagesConfig(
                         number_of_images=1,
