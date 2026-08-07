@@ -5,7 +5,6 @@ Pillow
 requests
 discord.py
 num2words
-google-genai
 python-dotenv
 typecast-python
 korean-romanizer
