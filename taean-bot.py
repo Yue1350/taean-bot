@@ -42,7 +42,6 @@ class MyBot(commands.Bot):
             'cogs.tts',
             'cogs.emoji',
             'cogs.meetup',
-            'cogs.nanobanana'  # NanoBanana Cog 추가
         ]
 
         for ext in initial_extensions:
