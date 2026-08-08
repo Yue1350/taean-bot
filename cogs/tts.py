@@ -20,8 +20,8 @@ class TTSCog(commands.Cog):
         if member.bot:
             return
 
-        guild_settings = self.bot.get_guild_settings(member.guild.id)
-        user_settings = self.bot.get_user_settings(member.id)
+        guild_settings = await self.bot.get_guild_settings(member.guild.id)
+        user_settings = await self.bot.get_user_settings(member.id)
         vc = member.guild.voice_client
         display_name_korean = convert_numbers_to_korean(auto_roman_to_korean(member.display_name))
 
@@ -66,6 +66,7 @@ class TTSCog(commands.Cog):
         if len(human_members) == 0:
             await vc.disconnect()
             guild_settings['temp_channel_id'] = None
+            await self.bot.update_guild_settings(member.guild.id, guild_settings)
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
@@ -76,8 +77,8 @@ class TTSCog(commands.Cog):
         if custom_emojis:
             return
 
-        guild_settings = self.bot.get_guild_settings(message.guild.id)
-        user_settings = self.bot.get_user_settings(message.author.id)
+        guild_settings = await self.bot.get_guild_settings(message.guild.id)
+        user_settings = await self.bot.get_user_settings(message.author.id)
         target_channel_id = guild_settings.get('channel_id') or guild_settings.get('temp_channel_id')
 
         author_name = convert_numbers_to_korean(auto_roman_to_korean(message.author.display_name))
@@ -174,9 +175,10 @@ class TTSCog(commands.Cog):
         else:
             await voice_channel.connect(reconnect=True, timeout=60.0)
 
-        settings = self.bot.get_guild_settings(interaction.guild_id)
+        settings = await self.bot.get_guild_settings(interaction.guild_id)
         if not settings.get('channel_id'):
             settings['temp_channel_id'] = interaction.channel_id
+            await self.bot.update_guild_settings(interaction.guild_id, settings)
 
         await interaction.response.send_message(f"🔊 {voice_channel.mention} 채널이 설정되었습니다.", ephemeral=True)
 
@@ -185,8 +187,9 @@ class TTSCog(commands.Cog):
         vc = interaction.guild.voice_client
         if vc and vc.is_connected():
             await vc.disconnect()
-            settings = self.bot.get_guild_settings(interaction.guild_id)
+            settings = await self.bot.get_guild_settings(interaction.guild_id)
             settings['temp_channel_id'] = None
+            await self.bot.update_guild_settings(interaction.guild_id, settings)
             await interaction.response.send_message("✅ 음성 채널에서 퇴장하였습니다.", ephemeral=True)
         else:
             await interaction.response.send_message("⚠ 현재 통화방에 입장해 있지 않습니다.", ephemeral=True)
@@ -205,7 +208,7 @@ class TTSCog(commands.Cog):
             await interaction.response.send_message("⚠ 관리자 권한이 필요합니다.", ephemeral=True)
             return
 
-        settings = self.bot.get_guild_settings(interaction.guild_id)
+        settings = await self.bot.get_guild_settings(interaction.guild_id)
         act_value = action.value
 
         if act_value == "create":
@@ -217,6 +220,7 @@ class TTSCog(commands.Cog):
                 )
                 settings['channel_id'] = new_channel.id
                 settings['temp_channel_id'] = None
+                await self.bot.update_guild_settings(interaction.guild_id, settings)
                 await interaction.followup.send(f"🔊 {new_channel.mention} 채널이 TTS 채널로 지정되었습니다.", ephemeral=True)
             except discord.Forbidden:
                 await interaction.followup.send("⚠ **채널 관리** 권한이 없어 채널을 생성하지 못했습니다.", ephemeral=True)
@@ -226,6 +230,7 @@ class TTSCog(commands.Cog):
             try:
                 settings['channel_id'] = interaction.channel_id
                 settings['temp_channel_id'] = None
+                await self.bot.update_guild_settings(interaction.guild_id, settings)
 
                 await interaction.channel.edit(name="𝗧𝗧𝗦", reason="TTS 채널 지정으로 인한 이름 변경")
                 await interaction.followup.send(f"🔊 {interaction.channel.mention} 채널이 TTS 채널로 지정되었습니다.", ephemeral=True)
@@ -235,6 +240,7 @@ class TTSCog(commands.Cog):
         elif act_value == "clear":
             await interaction.response.defer(ephemeral=True)
             settings['channel_id'] = None
+            await self.bot.update_guild_settings(interaction.guild_id, settings)
             await interaction.followup.send("✅ TTS 채널 설정이 해제되었습니다.", ephemeral=True)
 
     @app_commands.command(name="tts설정", description="자신의 TTS 목소리, 속도, 피치, 감정 및 강도를 설정합니다.")
@@ -242,7 +248,9 @@ class TTSCog(commands.Cog):
         if TTSSettingsView is None:
             await interaction.response.send_message("⚠ 설정 뷰(views.py)를 불러올 수 없습니다.", ephemeral=True)
             return
-        view = TTSSettingsView(self.bot, interaction.user.id)
+        
+        user_settings = await self.bot.get_user_settings(interaction.user.id)
+        view = TTSSettingsView(self.bot, interaction.user.id, user_settings)
         await interaction.response.send_message("", view=view, ephemeral=True)
 
 
