@@ -17,18 +17,15 @@ def resize_image_to_square(img_bytes: bytes, target_size: int = 128) -> bytes:
         is_animated = getattr(img, "is_animated", False)
         
         def process_frame(frame):
-            # 투명 배경의 128x128 캔버스 생성
             canvas = Image.new("RGBA", (target_size, target_size), (0, 0, 0, 0))
             frame_rgba = frame.convert("RGBA")
             
-            # 비율 유지 리사이징 계산
             w, h = frame_rgba.size
             ratio = min(target_size / w, target_size / h)
             new_w, new_h = max(1, int(w * ratio)), max(1, int(h * ratio))
             
             resized_frame = frame_rgba.resize((new_w, new_h), Image.Resampling.LANCZOS)
             
-            # 중앙 배치 위치 계산
             paste_x = (target_size - new_w) // 2
             paste_y = (target_size - new_h) // 2
             
@@ -70,8 +67,8 @@ class EmojiCog(commands.Cog):
         if message.guild is None or (message.author.bot and message.webhook_id is None):
             return
 
-        guild_settings = self.bot.get_guild_settings(message.guild.id)
-        user_settings = self.bot.get_user_settings(message.author.id)
+        guild_settings = await self.bot.get_guild_settings(message.guild.id)
+        user_settings = await self.bot.get_user_settings(message.author.id)
         target_channel_id = guild_settings.get('channel_id') or guild_settings.get('temp_channel_id')
 
         author_name = convert_numbers_to_korean(auto_roman_to_korean(message.author.display_name))
@@ -99,7 +96,6 @@ class EmojiCog(commands.Cog):
                     async with session.get(emoji_url) as resp:
                         if resp.status == 200:
                             emoji_bytes = await resp.read()
-                            # Pillow 처리는 동기 작업이므로 asyncio.to_thread로 실행하여 블로킹 방지 (128x128 로 변경)
                             processed_bytes = await asyncio.to_thread(resize_image_to_square, emoji_bytes, 128)
                             file = discord.File(io.BytesIO(processed_bytes), filename=f"emoji.{ext}")
                         else:
