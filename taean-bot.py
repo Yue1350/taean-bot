@@ -74,8 +74,10 @@ class MyBot(commands.Bot):
             'cogs.tts',
             'cogs.emoji',
             'cogs.meetup',
-            'cogs.teams',   # 추가됨
-            'cogs.ladder',  # 추가됨
+            'cogs.teams',       # 팀 나누기
+            'cogs.ladder',      # 사다리 타기
+            'cogs.dice',        # 주사위 / 골라줘
+            'cogs.voice_pick',  # 음성 채널 랜덤 지목
         ]
 
         for ext in initial_extensions:
