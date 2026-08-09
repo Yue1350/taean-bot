@@ -27,7 +27,6 @@ class MyBot(commands.Bot):
     async def get_guild_settings(self, guild_id: int) -> dict:
         doc = await guilds_col.find_one({"guild_id": str(guild_id)})
         if not doc:
-            # DB에 없더라도 바로 insert하지 않고 기본 dict만 반환 (중복 생성 방지)
             return {
                 'guild_id': str(guild_id),
                 'read_non_vc': False,           
@@ -37,7 +36,6 @@ class MyBot(commands.Bot):
         return doc
 
     async def update_guild_settings(self, guild_id: int, settings: dict):
-        # '_id' 필드가 들어있다면 복사본에서 제거하여 Mongo 내부 키 수정 에러 방지
         update_data = settings.copy()
         update_data.pop('_id', None)
         
@@ -51,7 +49,6 @@ class MyBot(commands.Bot):
     async def get_user_settings(self, user_id: int) -> dict:
         doc = await users_col.find_one({"user_id": str(user_id)})
         if not doc:
-            # DB에 없더라도 바로 insert하지 않고 기본 dict만 반환 (중복 생성 방지)
             return {
                 'user_id': str(user_id),
                 'voice_name': 'tc_69f2e455ea79fd197aa0476f',
@@ -77,6 +74,8 @@ class MyBot(commands.Bot):
             'cogs.tts',
             'cogs.emoji',
             'cogs.meetup',
+            'cogs.teams',   # 추가됨
+            'cogs.ladder',  # 추가됨
         ]
 
         for ext in initial_extensions:
